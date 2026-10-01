@@ -517,9 +517,16 @@ async function renderAdminWorkspace(mount) {
   mount.innerHTML = `
     <section class="admin-page">
       <header class="app-topbar admin-topbar">
-        <div class="topbar-side topbar-left"><button class="icon-btn icon-btn-light" id="admin-menu" title="Open menu" aria-label="Open menu"><i class="ph ph-list"></i></button></div>
-        <div class="brand-center"><div class="brand-mark brand-mark-admin"><img src="${versionedAsset("assets/images/website_icon.png")}" alt=""></div><div class="brand-wordmark"><strong>${escapeHtml(settings.restaurant_name)}</strong><span>Management</span></div></div>
-        <div class="topbar-side topbar-right"><button class="icon-btn icon-btn-light" id="admin-refresh" title="Refresh" aria-label="Refresh"><i class="ph ph-arrow-clockwise"></i></button></div>
+        <div class="topbar-side topbar-left" style="gap: 12px;">
+          <button class="icon-btn icon-btn-dark" id="admin-menu" title="Menu" aria-label="Menu"><i class="ph ph-list"></i></button>
+          <img src="${versionedAsset("assets/images/website_logo.png")}" alt="Four Flavours" style="height: 40px; width: auto;" />
+        </div>
+        <div class="brand-center main-logo-only">
+          <!-- Center logo safely removed to match POS layout -->
+        </div>
+        <div class="topbar-side topbar-right">
+          <button class="icon-btn icon-btn-dark" id="admin-refresh" title="Refresh" aria-label="Refresh"><i class="ph ph-arrows-clockwise"></i></button>
+        </div>
       </header>
 
       <nav class="admin-section-nav" id="admin-section-nav" aria-label="Management sections">
@@ -611,9 +618,11 @@ async function renderAdminWorkspace(mount) {
         { label: "Delete", icon: "ph-trash", className: "btn-danger", onClick: async ({ close, button }) => {
           button.disabled = true;
           try {
-            const { error } = await supabase.from("orders").delete().eq("id", order.id);
+            // Call our custom PostgreSQL function to bypass RLS and handle sequence resets
+            const { error } = await supabase.rpc("delete_pos_order", { p_order_id: order.id });
             if (error) throw error;
-            showToast("Order deleted", `Order #${order.order_number} has been removed.`);
+            
+            showToast("Order deleted", `Order #${order.order_number} has been completely removed.`);
             close();
             renderOrders();
           } catch(err) {
@@ -686,11 +695,56 @@ async function renderAdminWorkspace(mount) {
 
     const modal = openAppModal({
       title: `Order #${order.order_number} Receipt`,
-      subtitle: "Reprint or view historical bill details.",
+      subtitle: "Reprint, download, or view historical bill details.",
       body: `<div class="receipt-preview-container">${receiptHTML}</div>`,
       actions: [
         { label: "Close", icon: "ph-x", className: "btn-quiet", onClick: ({ close }) => close() },
-        { label: "Print Bill", icon: "ph-printer", className: "btn-primary", onClick: () => {
+        { label: "Download", icon: "ph-download-simple", className: "btn-quiet", onClick: async ({ root, button }) => {
+            const element = root.querySelector("#thermal-receipt-content");
+            button.disabled = true;
+            const originalText = button.innerHTML;
+            button.innerHTML = `<i class="ph ph-spinner-gap"></i><span>Saving...</span>`;
+            try {
+              if (!window.html2pdf) {
+                await new Promise((resolve) => {
+                  const script = document.createElement("script");
+                  script.src = "https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js";
+                  script.onload = resolve;
+                  document.head.appendChild(script);
+                });
+              }
+              
+              // Temporarily remove shadow and margin so they don't push the PDF onto a second page
+              const oldShadow = element.style.boxShadow;
+              const oldMargin = element.style.margin;
+              element.style.boxShadow = "none";
+              element.style.margin = "0";
+              
+              // Use getBoundingClientRect for exact sub-pixel accuracy after stripping the margin
+              const exactHeight = element.getBoundingClientRect().height;
+              const heightInMM = (exactHeight * 0.264583) + 1; // Just 1mm buffer for absolute safety
+              
+              const opt = {
+                margin: 0,
+                filename: `FourFlavours_Bill_#${order.order_number}.pdf`,
+                image: { type: 'jpeg', quality: 1 },
+                html2canvas: { scale: 4, useCORS: true }, 
+                jsPDF: { unit: 'mm', format: [80, heightInMM], orientation: 'portrait' }
+              };
+              
+              await html2pdf().set(opt).from(element).save();
+              
+              // Restore UI styles instantly after generation
+              element.style.boxShadow = oldShadow;
+              element.style.margin = oldMargin;
+            } catch (err) {
+              console.error("PDF Generation failed:", err);
+            } finally {
+              button.disabled = false;
+              button.innerHTML = originalText;
+            }
+        }},
+        { label: "Print", icon: "ph-printer", className: "btn-primary", onClick: () => {
             const host = document.querySelector("#receipt-print-host");
             if (host) { host.innerHTML = modal.root.querySelector("#thermal-receipt-content").outerHTML; window.print(); }
         }}
@@ -1592,8 +1646,32 @@ async function renderAdminWorkspace(mount) {
     );
   }
 
+  // --- LIVE MONITORING WEBSOCKET ---
+  const realtimeChannel = supabase.channel('admin-live-updates')
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'orders' }, payload => {
+      // 1. Alert the staff instantly
+      showToast("New Order Received", `Order #${payload.new.order_number} has been confirmed.`);
+      
+      // 2. Silently update the UI based on what the admin is currently viewing
+      if (section === "orders") {
+        renderOrders();
+      } else if (section === "overview") {
+        reload();
+      }
+    })
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'dining_sessions' }, () => {
+      // Live update the table statuses on the Overview dashboard
+      if (section === "overview") reload();
+    })
+    .subscribe();
+
   renderSection();
-  return () => navCleanup?.();
+  
+  // Cleanup the socket connection if the admin logs out or closes the workspace
+  return () => {
+    navCleanup?.();
+    if (realtimeChannel) supabase.removeChannel(realtimeChannel);
+  };
 }
 
 function metricCard(icon, value, label) {
