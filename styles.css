@@ -1257,6 +1257,78 @@ button,input,select,textarea{font:inherit}button{border:0}button:disabled{cursor
   height: 36px !important;
 }
 
+/* --- Native App Scroll Lock (Universal Sticky Headers) --- */
+html, body {
+  overscroll-behavior-y: none;
+  overflow: hidden !important; /* Total lock: prevents ALL browser-level scrolling */
+}
+
+/* 1. Pin ALL page wrappers to the exact screen edges */
+#app, .customer-page, .pos-page, .admin-page {
+  position: fixed !important;
+  top: 0 !important; 
+  left: 0 !important; 
+  right: 0 !important; 
+  bottom: 0 !important;
+  height: 100dvh !important;
+  width: 100vw !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+}
+
+/* 2. Force headers & nav strips to NEVER shrink or scroll */
+.app-topbar, .admin-section-nav, .pos-toolbar-row, .drill-down-header, .customer-topbar {
+  flex-shrink: 0 !important;
+  z-index: 45 !important; /* Keeps them safely anchored above the scrolling content */
+}
+
+/* 3. Turn middle areas into unbreakable flex chains */
+.customer-stage, .pos-content, .admin-content,
+.customer-menu-shell, #pos-dynamic-area, #admin-area {
+  flex: 1 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  min-height: 0 !important; 
+  padding-bottom: 0 !important;
+  width: 100% !important;
+}
+
+/* 4. Admin Content native scrolling */
+.admin-content {
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  -webkit-overflow-scrolling: touch !important;
+  padding-bottom: 80px !important;
+}
+
+/* Strip fixed heights from Admin inner lists so the outer container scrolls naturally */
+.admin-list-scroll, .admin-table-scroll, .session-scroll-container, .session-mini-scroll {
+  height: auto !important;
+  max-height: none !important;
+  flex: none !important;
+  overflow: visible !important;
+}
+
+/* 5. POS & Customer native scrolling */
+.customer-product-scroll, .pos-product-container {
+  flex: 1 1 auto !important;
+  height: 100% !important;
+  max-height: none !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  padding-bottom: 140px !important; /* Massive space for the final row */
+  -webkit-overflow-scrolling: touch !important;
+  overscroll-behavior-y: contain !important;
+}
+
+@media (max-width: 1100px) {
+  .pos-product-container, .customer-product-scroll { height: 100% !important; }
+}
+@media (max-width: 720px) {
+  .pos-product-container, .customer-product-scroll { height: 100% !important; min-height: 0 !important; }
+}
+
 /* --- Admin Header Alignment & Logo Scaling --- */
 .admin-topbar {
   padding: 6px 12px !important;
@@ -1276,4 +1348,67 @@ button,input,select,textarea{font:inherit}button{border:0}button:disabled{cursor
   display: block;
   object-fit: contain;
   object-position: left center;
+}
+
+/* --- Premium Redesign for Add Dish / Add Table Buttons --- */
+.section-title-row .btn-primary {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 8px !important;
+  height: 44px !important;
+  padding: 0 20px !important;
+  border-radius: 22px !important; /* Premium pill shape */
+  font-size: 0.85rem !important;
+  font-weight: 800 !important;
+  white-space: nowrap !important;
+  flex-shrink: 0 !important; /* Prevents the button from being compressed */
+  box-shadow: 0 6px 16px rgba(25, 50, 28, 0.18) !important;
+  transition: transform 150ms ease, box-shadow 150ms ease, background 150ms ease !important;
+}
+
+.section-title-row .btn-primary:active {
+  transform: translateY(2px) !important;
+  box-shadow: 0 2px 6px rgba(25, 50, 28, 0.15) !important;
+}
+
+.section-title-row .btn-primary i {
+  font-size: 18px !important;
+  font-weight: bold !important;
+  flex-shrink: 0 !important; /* Absolutely prevents the icon from squishing into the text */
+  margin: 0 !important;
+}
+
+/* Beautiful mobile scaling */
+@media (max-width: 720px) {
+  .section-title-row .btn-primary {
+    height: 40px !important;
+    padding: 0 16px !important;
+    font-size: 0.8rem !important;
+    border-radius: 20px !important;
+  }
+  .section-title-row .btn-primary i {
+    font-size: 16px !important;
+  }
+}
+
+/* --- Global Refresh Animation & Page Blocker --- */
+@keyframes icon-spin-anim {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.icon-spin {
+  animation: icon-spin-anim 0.75s linear infinite !important;
+}
+
+.full-page-blocker {
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: 99999 !important; /* Highest priority to cover everything */
+  background: rgba(18, 34, 22, 0.15) !important;
+  backdrop-filter: blur(2px) !important;
+  -webkit-backdrop-filter: blur(2px) !important;
+  cursor: wait !important;
+  display: block !important;
 }

@@ -544,7 +544,33 @@ async function renderAdminWorkspace(mount) {
   const area = mount.querySelector("#admin-area");
 
   mount.querySelector("#admin-menu").addEventListener("click", () => window.__FOUR_FLAVOURS_NAV__?.open());
-  mount.querySelector("#admin-refresh").addEventListener("click", async () => { await reload(); showToast("Workspace refreshed"); });
+  
+  mount.querySelector("#admin-refresh").addEventListener("click", async (e) => { 
+    const btn = e.currentTarget;
+    const icon = btn.querySelector("i");
+    
+    // 1. Create a full-page overlay to block all clicks
+    const blocker = document.createElement("div");
+    blocker.className = "full-page-blocker";
+    document.body.appendChild(blocker);
+    
+    // 2. Animate the button
+    btn.disabled = true;
+    icon.classList.add("icon-spin");
+    
+    try {
+      await reload(); 
+      showToast("Workspace refreshed"); 
+    } catch (err) {
+      showToast("Refresh failed", err.message, "error");
+    } finally {
+      // 3. Remove blocker and stop animation
+      icon.classList.remove("icon-spin");
+      btn.disabled = false;
+      blocker.remove();
+    }
+  });
+
   mount.querySelector("#admin-section-nav").addEventListener("click", event => {
     const b = event.target.closest("[data-section]");
     if (!b) return;
