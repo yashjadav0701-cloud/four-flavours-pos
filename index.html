@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#19321c" />
+  <meta name="description" content="Four Flavours — premium restaurant ordering and management" />
+  <title>Four Flavours</title>
+
+  <!-- APP VERSION: change src/core/config.js then globally replace v=2.0.0 in this file. -->
+  <link rel="icon" type="image/png" href="assets/images/website_icon.png?v=2.0.0" />
+  <link rel="preload" as="image" href="assets/images/website_logo.png?v=2.0.0" />
+  <link rel="stylesheet" href="styles.css?v=2.0.0" />
+
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@phosphor-icons/web@2.1.2/src/regular/style.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@phosphor-icons/web@2.1.2/src/bold/style.css" />
+
+  <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+  <link rel="stylesheet" href="https://unpkg.com/lenis@1.3.26/dist/lenis.css" />
+  <script src="https://unpkg.com/lenis@1.3.26/dist/lenis.min.js"></script>
+
+  <!-- Browser-safe Supabase publishable/anon configuration. Never put service_role here. -->
+  <script>
+    window.__SAVRIVO_CONFIG__ = {
+      SUPABASE_URL: "https://nzmnxboajwcqawubuemm.supabase.co",
+      SUPABASE_ANON_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im56bW54Ym9handjcWF3dWJ1ZW1tIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTA4MjExMTgsImV4cCI6MjEwNjM5NzExOH0.FJvlOoKowGY3UBFNaYEI6EkqchpLRRD38zvDTltOxr4"
+    };
+  </script>
+</head>
+<body>
+  <noscript><div class="noscript">Four Flavours requires JavaScript to run.</div></noscript>
+  <main id="app" aria-live="polite"></main>
+  <div id="toast-root" class="toast-root" aria-live="assertive" aria-atomic="true"></div>
+  <section id="receipt-print-host" class="print-host" aria-hidden="true"></section>
+  <section id="qr-print-host" class="print-host" aria-hidden="true"></section>
+  <script type="module" src="app.js?v=2.0.0"></script>
+</body>
+</html>
