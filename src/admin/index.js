@@ -523,11 +523,12 @@ async function renderAdminWorkspace(mount) {
       </header>
 
       <nav class="admin-section-nav" id="admin-section-nav" aria-label="Management sections">
-        <button data-section="overview" class="active"><i class="ph ph-squares-four"></i><span>Overview</span></button>
-        <button data-section="cuisines"><i class="ph ph-image"></i><span>Cuisines</span></button>
-        <button data-section="menu"><i class="ph ph-fork-knife"></i><span>Menu</span></button>
-        <button data-section="tables"><i class="ph ph-armchair"></i><span>Tables</span></button>
-        <button data-section="settings"><i class="ph ph-gear"></i><span>Settings</span></button>
+        <button data-section="overview" class="active"><i class="ph-bold ph-squares-four"></i><span>Overview</span></button>
+        <button data-section="orders"><i class="ph-bold ph-receipt"></i><span>Orders</span></button>
+        <button data-section="cuisines"><i class="ph-bold ph-image"></i><span>Cuisines</span></button>
+        <button data-section="menu"><i class="ph-bold ph-fork-knife"></i><span>Menu</span></button>
+        <button data-section="tables"><i class="ph-bold ph-armchair"></i><span>Tables</span></button>
+        <button data-section="settings"><i class="ph-bold ph-gear"></i><span>Settings</span></button>
       </nav>
       <main class="admin-content"><section id="admin-area"></section></main>
     </section>`;
@@ -552,10 +553,160 @@ async function renderAdminWorkspace(mount) {
 
   function renderSection() {
     if (section === "overview") renderOverview();
+    if (section === "orders") renderOrders();
     if (section === "cuisines") renderCuisines();
     if (section === "menu") renderMenu();
     if (section === "tables") renderTables();
     if (section === "settings") renderSettings();
+  }
+
+  async function renderOrders() {
+    area.innerHTML = `<section class="section-title-row"><div><span class="eyebrow">Order History</span><h1>All past bills.</h1><p>View, reprint, or permanently delete historical receipts from the database.</p></div></section><section class="admin-panel"><div class="admin-list-scroll" id="orders-list"><div class="empty-state"><i class="ph ph-spinner-gap"></i><strong>Loading orders...</strong></div></div></section>`;
+    const list = area.querySelector("#orders-list");
+    
+    try {
+      // Fetch orders and their nested items
+      const { data: orders, error } = await supabase.from("orders").select("*, order_items(*)").order("created_at", { ascending: false }).limit(100);
+      if (error) throw error;
+      
+      if (!orders || orders.length === 0) {
+        list.innerHTML = `<div class="empty-state"><i class="ph ph-receipt"></i><strong>No orders yet</strong><span>Completed orders will appear here.</span></div>`;
+        return;
+      }
+
+      list.innerHTML = orders.map(o => `
+        <article class="admin-product-row">
+          <div class="admin-product-main">
+            <div class="admin-product-title">
+              <div><strong>Order #${escapeHtml(o.order_number)}</strong><span>${new Date(o.created_at).toLocaleString('en-IN', {day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit'})}</span></div>
+              <strong>${money(o.grand_total, settings.currency_symbol)}</strong>
+            </div>
+            <p>${o.order_type === 'dine_in' ? `Dine-in · Table ${tables.find(t => t.id === o.table_id)?.table_no || 'Unknown'}` : 'Takeaway'} · ${o.order_items.length} items</p>
+          </div>
+          <div class="admin-product-actions">
+            <button class="icon-btn icon-btn-light" data-view-order="${o.id}" title="View Receipt"><i class="ph ph-printer"></i></button>
+            <button class="icon-btn icon-btn-danger" data-delete-order="${o.id}" title="Delete Order"><i class="ph ph-trash"></i></button>
+          </div>
+        </article>
+      `).join("");
+
+      list.addEventListener("click", e => {
+        const view = e.target.closest("[data-view-order]");
+        const del = e.target.closest("[data-delete-order]");
+        if (view) showAdminReceiptPreview(orders.find(x => x.id === view.dataset.viewOrder));
+        if (del) deleteOrder(orders.find(x => x.id === del.dataset.deleteOrder));
+      });
+    } catch (err) {
+      list.innerHTML = `<div class="empty-state"><i class="ph ph-warning-circle"></i><strong>Error loading orders</strong><span>${escapeHtml(err.message)}</span></div>`;
+    }
+  }
+
+  function deleteOrder(order) {
+    openAppModal({
+      title: `Delete Order #${order.order_number}?`,
+      subtitle: "This will permanently remove the bill and its items from the database.",
+      body: `<div class="danger-confirm"><div class="danger-confirm-icon"><i class="ph ph-trash"></i></div><h3>Delete this record?</h3><p>This action cannot be undone.</p></div>`,
+      actions: [
+        { label: "Cancel", icon: "ph-x", className: "btn-quiet", onClick: ({ close }) => close() },
+        { label: "Delete", icon: "ph-trash", className: "btn-danger", onClick: async ({ close, button }) => {
+          button.disabled = true;
+          try {
+            const { error } = await supabase.from("orders").delete().eq("id", order.id);
+            if (error) throw error;
+            showToast("Order deleted", `Order #${order.order_number} has been removed.`);
+            close();
+            renderOrders();
+          } catch(err) {
+            button.disabled = false;
+            showToast("Error", err.message, "error");
+          }
+        }}
+      ]
+    });
+  }
+
+  function showAdminReceiptPreview(order) {
+    let tableString = "Takeaway";
+    if (order.order_type === "dine_in" && order.table_id) {
+      const t = tables.find(x => x.id === order.table_id);
+      if (t) tableString = `Dine-in · Table ${t.table_no}`;
+    }
+    const date = new Date(order.created_at).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+
+    const receiptHTML = `
+      <article class="thermal-receipt" id="thermal-receipt-content">
+        <header class="thermal-head">
+          <img class="thermal-logo" src="${versionedAsset("assets/images/website_icon.png")}" alt="Logo">
+          <h1>${escapeHtml(settings.restaurant_name)}</h1>
+          ${settings.restaurant_address ? `<p>${escapeHtml(settings.restaurant_address).replace(/\n/g, '<br>')}</p>` : ''}
+          ${settings.gst_number ? `<p><strong>GSTIN:</strong> ${escapeHtml(settings.gst_number)}</p>` : ''}
+        </header>
+        <div class="thermal-meta">
+          <div><span>Order:</span> <strong>#${escapeHtml(order.order_number)}</strong></div>
+          <div><span>Date:</span> <strong>${date}</strong></div>
+          <div><span>Type:</span> <strong>${escapeHtml(tableString)}</strong></div>
+        </div>
+        <table class="thermal-items-table">
+          <thead>
+            <tr>
+              <th style="text-align: left;">Item</th>
+              <th style="text-align: center;">Qty</th>
+              <th style="text-align: right;">Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${order.order_items.map(i => `
+              <tr>
+                <td style="text-align: left;">${escapeHtml(i.name_snapshot)}<br><small>${money(i.unit_price, settings.currency_symbol)}</small></td>
+                <td style="text-align: center;">${i.quantity}</td>
+                <td style="text-align: right;">${money(Number(i.unit_price) * Number(i.quantity), settings.currency_symbol)}</td>
+              </tr>
+            `).join("")}
+          </tbody>
+        </table>
+        <div class="thermal-totals-wrap">
+          <div class="thermal-line"><span>Subtotal</span><strong>${money(order.subtotal, settings.currency_symbol)}</strong></div>
+          <div class="thermal-line"><span>CGST (${order.cgst_rate}%)</span><strong>${money(order.cgst, settings.currency_symbol)}</strong></div>
+          <div class="thermal-line"><span>SGST (${order.sgst_rate}%)</span><strong>${money(order.sgst, settings.currency_symbol)}</strong></div>
+          <div class="thermal-line"><span>Rounding</span><strong>${money(order.rounding, settings.currency_symbol)}</strong></div>
+          <div class="thermal-line thermal-grand"><span>GRAND TOTAL</span><strong>${money(order.grand_total, settings.currency_symbol)}</strong></div>
+        </div>
+        ${settings.upi_id ? `
+          <div class="thermal-payment-block">
+            <div class="thermal-qr" id="admin-thermal-upi"></div>
+            <div class="thermal-upi-note"><strong>Scan to pay</strong><br>Supported by all UPI apps</div>
+          </div>
+        ` : ""}
+        <footer class="thermal-foot">
+          <p>${escapeHtml(settings.receipt_footer || 'Thank you for dining with us!')}</p>
+          <div class="thermal-software-tag">Powered by Four Flavours POS</div>
+        </footer>
+      </article>
+    `;
+
+    const modal = openAppModal({
+      title: `Order #${order.order_number} Receipt`,
+      subtitle: "Reprint or view historical bill details.",
+      body: `<div class="receipt-preview-container">${receiptHTML}</div>`,
+      actions: [
+        { label: "Close", icon: "ph-x", className: "btn-quiet", onClick: ({ close }) => close() },
+        { label: "Print Bill", icon: "ph-printer", className: "btn-primary", onClick: () => {
+            const host = document.querySelector("#receipt-print-host");
+            if (host) { host.innerHTML = modal.root.querySelector("#thermal-receipt-content").outerHTML; window.print(); }
+        }}
+      ]
+    });
+
+    if (settings.upi_id && globalThis.QRCode) {
+      const qr = modal.root.querySelector("#admin-thermal-upi"); 
+      const url = new URL("upi://pay"); 
+      url.searchParams.set("pa", settings.upi_id); 
+      url.searchParams.set("pn", settings.restaurant_name); 
+      url.searchParams.set("am", Number(order.grand_total).toFixed(2)); 
+      url.searchParams.set("cu", "INR"); 
+      url.searchParams.set("tn", `Order #${order.order_number}`);
+      new QRCode(qr, { text: url.toString(), width: 140, height: 140, correctLevel: QRCode.CorrectLevel.L });
+    }
   }
 
   function renderCuisines() {
@@ -665,11 +816,19 @@ async function renderAdminWorkspace(mount) {
   }
 
   function renderSettings() {
-    area.innerHTML = `<section class="section-title-row"><div><span class="eyebrow">Restaurant settings</span><h1>Keep the bill precise.</h1><p>The final tax and total are calculated on the database, not trusted from the browser.</p></div></section><section class="admin-panel settings-panel"><form id="settings-form" class="settings-form-grid"><label class="field"><span>Restaurant name</span><input class="field-input" name="restaurant_name" value="${escapeHtml(settings.restaurant_name)}" required></label><label class="field"><span>UPI ID</span><input class="field-input" name="upi_id" value="${escapeHtml(settings.upi_id)}" placeholder="fourflavours@upi"></label><label class="field"><span>CGST %</span><input class="field-input" name="cgst_rate" type="number" min="0" max="100" step="0.01" value="${Number(settings.cgst_rate)}" required></label><label class="field"><span>SGST %</span><input class="field-input" name="sgst_rate" type="number" min="0" max="100" step="0.01" value="${Number(settings.sgst_rate)}" required></label><label class="field settings-wide"><span>Receipt footer</span><input class="field-input" name="receipt_footer" value="${escapeHtml(settings.receipt_footer)}"></label><div class="settings-wide settings-preview"><div class="settings-preview-icon"><i class="ph ph-shield-check"></i></div><div><strong>Secure calculation</strong><span>Prices, tax rates and the final total are recalculated by PostgreSQL when the order is created.</span></div></div><div class="settings-wide"><button class="btn btn-primary" type="submit"><i class="ph ph-floppy-disk"></i>Save settings</button></div></form></section>`;
+    area.innerHTML = `<section class="section-title-row"><div><span class="eyebrow">Restaurant settings</span><h1>Keep the bill precise.</h1><p>The final tax and total are calculated on the database, not trusted from the browser.</p></div></section><section class="admin-panel settings-panel"><form id="settings-form" class="settings-form-grid"><label class="field"><span>Restaurant name</span><input class="field-input" name="restaurant_name" value="${escapeHtml(settings.restaurant_name)}" required></label><label class="field"><span>UPI ID</span><input class="field-input" name="upi_id" value="${escapeHtml(settings.upi_id || "")}" placeholder="fourflavours@upi"></label><label class="field"><span>GSTIN (GST Number)</span><input class="field-input" name="gst_number" value="${escapeHtml(settings.gst_number || "")}" placeholder="22AAAAA0000A1Z5"></label><label class="field settings-wide"><span>Restaurant Address (Prints on Bill)</span><textarea class="field-input textarea-input" name="restaurant_address" placeholder="123 Food Street, City, State" rows="2">${escapeHtml(settings.restaurant_address || "")}</textarea></label><label class="field"><span>CGST %</span><input class="field-input" name="cgst_rate" type="number" min="0" max="100" step="0.01" value="${Number(settings.cgst_rate)}" required></label><label class="field"><span>SGST %</span><input class="field-input" name="sgst_rate" type="number" min="0" max="100" step="0.01" value="${Number(settings.sgst_rate)}" required></label><label class="field settings-wide"><span>Receipt footer</span><input class="field-input" name="receipt_footer" value="${escapeHtml(settings.receipt_footer || "")}"></label><div class="settings-wide settings-preview"><div class="settings-preview-icon"><i class="ph ph-shield-check"></i></div><div><strong>Secure calculation</strong><span>Prices, tax rates and the final total are recalculated by PostgreSQL when the order is created.</span></div></div><div class="settings-wide"><button class="btn btn-primary" type="submit"><i class="ph ph-floppy-disk"></i>Save settings</button></div></form></section>`;
     area.querySelector("#settings-form").addEventListener("submit", async e => {
       e.preventDefault(); const fd = new FormData(e.currentTarget);
-      const payload = { restaurant_name: String(fd.get("restaurant_name") || "").trim(), upi_id: String(fd.get("upi_id") || "").trim(), cgst_rate: Number(fd.get("cgst_rate")), sgst_rate: Number(fd.get("sgst_rate")), receipt_footer: String(fd.get("receipt_footer") || "").trim() };
-      try { const { error } = await supabase.from("app_settings").update(payload).eq("id", 1); if (error) throw error; Object.assign(settings, payload); showToast("Settings saved", "Tax and UPI configuration updated."); } catch (error) { showToast("Could not save settings", error.message, "error"); }
+      const payload = { 
+        restaurant_name: String(fd.get("restaurant_name") || "").trim(), 
+        upi_id: String(fd.get("upi_id") || "").trim(),
+        gst_number: String(fd.get("gst_number") || "").trim(),
+        restaurant_address: String(fd.get("restaurant_address") || "").trim(),
+        cgst_rate: Number(fd.get("cgst_rate")), 
+        sgst_rate: Number(fd.get("sgst_rate")), 
+        receipt_footer: String(fd.get("receipt_footer") || "").trim() 
+      };
+      try { const { error } = await supabase.from("app_settings").update(payload).eq("id", 1); if (error) throw error; Object.assign(settings, payload); showToast("Settings saved", "Configuration updated."); } catch (error) { showToast("Could not save settings", error.message, "error"); }
     });
   }
 
