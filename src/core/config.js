@@ -9,27 +9,27 @@ export const ROUTES = Object.freeze({
 });
 
 /**
- * Canonical public URL for Four Flavours.
+ * Canonical production URL.
  *
- * IMPORTANT:
- * This is intentionally NOT derived from window.location.origin.
- * Admin users may generate QR codes while working from localhost or a
- * Vercel preview deployment. Printed QR codes must ALWAYS point to the
- * live production restaurant URL.
+ * Never generate printed QR codes from window.location.origin because that
+ * would allow localhost / Vercel preview URLs to accidentally become
+ * permanent restaurant QR destinations.
  */
-export const PUBLIC_APP_URL = "https://tff.vercel.app";
+export const PUBLIC_APP_URL = "https://four-flavours.vercel.app";
 
 /**
- * Creates the permanent customer menu URL for a table.
+ * Returns the permanent customer menu URL for a specific table.
  *
  * Example:
- * https://tff.vercel.app/?table=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+ * https://four-flavours.vercel.app/?table=<TABLE_UUID>
  */
 export function getCustomerTableUrl(tableId) {
   const id = String(tableId ?? "").trim();
 
   if (!id) {
-    throw new Error("A valid table ID is required to create the QR URL.");
+    throw new Error(
+      "A valid table ID is required to generate a QR code."
+    );
   }
 
   return `${PUBLIC_APP_URL}/?table=${encodeURIComponent(id)}`;

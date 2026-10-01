@@ -1713,3 +1713,96 @@ grant usage, select on all sequences in schema public to authenticated;
 --
 -- No production password is embedded in this source.
 -- ============================================================================
+
+
+-- ============================================================================
+-- FOUR FLAVOURS — DISH IMAGE STORAGE
+-- ============================================================================
+--
+-- Bucket:
+--   dish-images
+--
+-- Rules:
+--   • Public read/serving because dish photos are public restaurant content.
+--   • Only manager/admin users can upload, update or delete.
+--   • Only /products/* paths are allowed.
+--   • Only WebP files are accepted.
+--   • Final object size is capped at 2 MiB.
+--
+-- The frontend compresses/crops images before uploading.
+-- ============================================================================
+
+insert into storage.buckets (
+  id,
+  name,
+  public,
+  file_size_limit,
+  allowed_mime_types
+)
+values (
+  'dish-images',
+  'dish-images',
+  true,
+  2097152,
+  array['image/webp']::text[]
+)
+on conflict (id)
+do update set
+  public = true,
+  file_size_limit = 2097152,
+  allowed_mime_types = array['image/webp']::text[];
+
+
+-- --------------------------------------------------------------------------
+-- Storage security policies
+-- --------------------------------------------------------------------------
+
+drop policy if exists "four flavours managers upload dish images"
+on storage.objects;
+
+create policy "four flavours managers upload dish images"
+on storage.objects
+for insert
+to authenticated
+with check (
+  bucket_id = 'dish-images'
+  and public.is_manager()
+  and name like 'products/%'
+  and lower(right(name, 5)) = '.webp'
+);
+
+
+drop policy if exists "four flavours managers update dish images"
+on storage.objects;
+
+create policy "four flavours managers update dish images"
+on storage.objects
+for update
+to authenticated
+using (
+  bucket_id = 'dish-images'
+  and public.is_manager()
+  and name like 'products/%'
+  and lower(right(name, 5)) = '.webp'
+)
+with check (
+  bucket_id = 'dish-images'
+  and public.is_manager()
+  and name like 'products/%'
+  and lower(right(name, 5)) = '.webp'
+);
+
+
+drop policy if exists "four flavours managers delete dish images"
+on storage.objects;
+
+create policy "four flavours managers delete dish images"
+on storage.objects
+for delete
+to authenticated
+using (
+  bucket_id = 'dish-images'
+  and public.is_manager()
+  and name like 'products/%'
+  and lower(right(name, 5)) = '.webp'
+);

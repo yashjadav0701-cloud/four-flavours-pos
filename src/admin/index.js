@@ -373,6 +373,70 @@ async function optimizeDishImage(file) {
   }
 }
 
+function drawCuisineCrop(source, sourceWidth, sourceHeight, targetWidth, targetHeight) {
+  const targetRatio = targetWidth / targetHeight;
+  const sourceRatio = sourceWidth / sourceHeight;
+  let cropWidth, cropHeight, cropX, cropY;
+
+  if (sourceRatio > targetRatio) {
+    // Image is wider than needed. Center-crop horizontally.
+    cropHeight = sourceHeight;
+    cropWidth = sourceHeight * targetRatio;
+    cropX = (sourceWidth - cropWidth) / 2;
+    cropY = 0;
+  } else {
+    // Image is taller than needed. Top-align to preserve text at the top!
+    cropWidth = sourceWidth;
+    cropHeight = sourceWidth / targetRatio;
+    cropX = 0;
+    cropY = 0; // 0 anchors it to the absolute top edge
+  }
+
+  const canvas = document.createElement("canvas");
+  canvas.width = targetWidth;
+  canvas.height = targetHeight;
+  const context = canvas.getContext("2d", { alpha: false });
+  if (!context) throw new Error("The browser could not create an image canvas.");
+  context.imageSmoothingEnabled = true;
+  context.imageSmoothingQuality = "high";
+  context.drawImage(source, cropX, cropY, cropWidth, cropHeight, 0, 0, targetWidth, targetHeight);
+  return canvas;
+}
+
+async function optimizeCuisineImage(file) {
+  if (!file) return null;
+  if (!file.type.startsWith("image/")) throw new Error("Please select an image file.");
+  if (file.size > MAX_SOURCE_IMAGE_BYTES) throw new Error("Please select an image smaller than 12 MB.");
+
+  const decoded = await decodeDishImage(file);
+  try {
+    if (!decoded.width || !decoded.height) throw new Error("The selected image has invalid dimensions.");
+    if (decoded.width * decoded.height > 50_000_000) throw new Error("The selected image has too many pixels.");
+
+    // Target ratio 3:4 (Standard portrait cards)
+    const profiles = [
+      { width: 1200, height: 1600, quality: 0.86 },
+      { width: 1200, height: 1600, quality: 0.82 },
+      { width: 960, height: 1280, quality: 0.82 },
+      { width: 768, height: 1024, quality: 0.78 }
+    ];
+
+    let lastBlob = null;
+    for (const profile of profiles) {
+      const canvas = drawCuisineCrop(decoded.source, decoded.width, decoded.height, profile.width, profile.height);
+      const blob = await canvasToWebp(canvas, profile.quality);
+      lastBlob = blob;
+      if (blob.size <= TARGET_IMAGE_BYTES) return new File([blob], `cuisine-${crypto.randomUUID()}.webp`, { type: "image/webp", lastModified: Date.now() });
+      if (blob.size <= MAX_FINAL_IMAGE_BYTES && profile === profiles[profiles.length - 1]) return new File([blob], `cuisine-${crypto.randomUUID()}.webp`, { type: "image/webp", lastModified: Date.now() });
+    }
+
+    if (lastBlob && lastBlob.size <= MAX_FINAL_IMAGE_BYTES) return new File([lastBlob], `cuisine-${crypto.randomUUID()}.webp`, { type: "image/webp", lastModified: Date.now() });
+    throw new Error("The optimized image is still too large.");
+  } finally {
+    decoded.cleanup();
+  }
+}
+
 function storagePathFromUrl(
   value
 ) {
@@ -401,7 +465,8 @@ function storagePathFromUrl(
   }
 
   if (
-    raw.startsWith("products/")
+    raw.startsWith("products/") ||
+    raw.startsWith("cuisines/")
   ) {
     return raw;
   }
@@ -434,18 +499,19 @@ export async function render({ mount }) {
 }
 
 async function fetchWorkspace() {
-  const [settings, products, tables, sessions] = await Promise.all([
+  const [settings, products, tables, sessions, cuisines] = await Promise.all([
     supabase.from("app_settings").select("*").eq("id", 1).maybeSingle(),
     supabase.from("products").select("*").order("sort_order", { ascending: true }).order("name", { ascending: true }),
     supabase.from("tables").select("*").order("table_no", { ascending: true }),
-    supabase.from("dining_sessions").select("*").neq("status", "closed").order("bill_requested_at", { ascending: false, nullsFirst: false }).order("created_at", { ascending: false })
+    supabase.from("dining_sessions").select("*").neq("status", "closed").order("bill_requested_at", { ascending: false, nullsFirst: false }).order("created_at", { ascending: false }),
+    supabase.from("cuisines").select("*").order("sort_order", { ascending: true })
   ]);
-  for (const result of [settings, products, tables, sessions]) if (result.error) throw result.error;
-  return { settings: { ...DEFAULT_SETTINGS, ...(settings.data ?? {}) }, products: products.data ?? [], tables: tables.data ?? [], sessions: sessions.data ?? [] };
+  for (const result of [settings, products, tables, sessions, cuisines]) if (result?.error) throw result.error;
+  return { settings: { ...DEFAULT_SETTINGS, ...(settings.data ?? {}) }, products: products.data ?? [], tables: tables.data ?? [], sessions: sessions.data ?? [], cuisines: cuisines.data ?? [] };
 }
 
 async function renderAdminWorkspace(mount) {
-  let { settings, products, tables, sessions } = await fetchWorkspace();
+  let { settings, products, tables, sessions, cuisines } = await fetchWorkspace();
   let section = "overview";
 
   mount.innerHTML = `
@@ -458,8 +524,9 @@ async function renderAdminWorkspace(mount) {
 
       <nav class="admin-section-nav" id="admin-section-nav" aria-label="Management sections">
         <button data-section="overview" class="active"><i class="ph ph-squares-four"></i><span>Overview</span></button>
+        <button data-section="cuisines"><i class="ph ph-image"></i><span>Cuisines</span></button>
         <button data-section="menu"><i class="ph ph-fork-knife"></i><span>Menu</span></button>
-        <button data-section="tables"><i class="ph ph-table"></i><span>Tables</span></button>
+        <button data-section="tables"><i class="ph ph-armchair"></i><span>Tables</span></button>
         <button data-section="settings"><i class="ph ph-gear"></i><span>Settings</span></button>
       </nav>
       <main class="admin-content"><section id="admin-area"></section></main>
@@ -479,15 +546,72 @@ async function renderAdminWorkspace(mount) {
   });
 
   async function reload() {
-    ({ settings, products, tables, sessions } = await fetchWorkspace());
+    ({ settings, products, tables, sessions, cuisines } = await fetchWorkspace());
     renderSection();
   }
 
   function renderSection() {
     if (section === "overview") renderOverview();
+    if (section === "cuisines") renderCuisines();
     if (section === "menu") renderMenu();
     if (section === "tables") renderTables();
     if (section === "settings") renderSettings();
+  }
+
+  function renderCuisines() {
+    area.innerHTML = `
+      <section class="section-title-row"><div><span class="eyebrow">Cuisine Backgrounds</span><h1>Main menu categories.</h1><p>Upload beautiful background images for the 4 main cuisines. These appear as large cards on the customer and POS screens.</p></div></section>
+      <section class="admin-panel"><div class="admin-list-scroll" id="cuisine-list"></div></section>`;
+    const list = area.querySelector("#cuisine-list");
+    list.innerHTML = cuisines.length ? cuisines.map(cuisine => `<article class="admin-product-row"><div class="admin-product-image">${cuisine.image_url ? `<img src="${versionedAsset(cuisine.image_url)}" alt="">` : `<div class="product-placeholder"><i class="ph ph-image"></i></div>`}</div><div class="admin-product-main"><div class="admin-product-title"><div><strong>${escapeHtml(cuisine.name)}</strong></div></div></div><div class="admin-product-actions"><button class="icon-btn icon-btn-light" data-edit-cuisine="${cuisine.id}" title="Upload image" aria-label="Upload image"><i class="ph ph-upload-simple"></i></button></div></article>`).join("") : `<div class="empty-state"><strong>No cuisines configured in the database.</strong></div>`;
+    list.addEventListener("click", e => { const b = e.target.closest("[data-edit-cuisine]"); if (!b) return; const c = cuisines.find(x => x.id === b.dataset.editCuisine); if (c) openCuisineEditor(c); });
+  }
+
+  function openCuisineEditor(cuisine) {
+    const currentImageUrl = cuisine?.image_url ? versionedAsset(cuisine.image_url) : "";
+    const currentImageHtml = currentImageUrl ? `<div class="image-upload-preview" id="cuisine-preview"><img src="${currentImageUrl}" alt="" /><div class="image-preview-copy"><strong>Current background</strong><span>Upload another to replace.</span></div></div>` : `<div class="image-upload-preview empty" id="cuisine-preview"><i class="ph ph-image"></i><div class="image-preview-copy"><strong>No image yet</strong><span>Add a background photo.</span></div></div>`;
+    const modal = openAppModal({
+      title: `Edit ${escapeHtml(cuisine.name)} image`,
+      subtitle: "Photos are automatically cropped to 4:5 and optimized.",
+      body: `<form id="cuisine-form" class="stack-form"><div class="field"><span>Background Image</span><label class="image-upload-zone"><input id="cuisine-image" type="file" accept="image/*" /><span class="image-upload-icon"><i class="ph ph-cloud-arrow-up"></i></span><span class="image-upload-copy"><strong>Choose photo</strong><small>JPG, PNG, WebP · optimized automatically</small></span></label>${currentImageHtml}<div class="image-upload-status" id="cuisine-upload-status"></div></div></form>`,
+      actions: [
+        { label: "Cancel", icon: "ph-x", className: "btn-quiet", onClick: ({ close }) => close() },
+        { label: "Save image", icon: "ph-floppy-disk", className: "btn-primary", onClick: async ({ root, close, button }) => {
+          const fileInput = root.querySelector("#cuisine-image");
+          const selectedFile = fileInput?.files?.[0];
+          if (!selectedFile) { close(); return; }
+          button.disabled = true;
+          const statusNode = root.querySelector("#cuisine-upload-status");
+          try {
+            statusNode.innerHTML = `<i class="ph ph-spinner-gap"></i><span>Optimizing...</span>`;
+            const optimizedFile = await optimizeCuisineImage(selectedFile);
+            const newStoragePath = `cuisines/${cuisine.id}/${crypto.randomUUID()}.webp`;
+            statusNode.innerHTML = `<i class="ph ph-cloud-arrow-up"></i><span>Uploading...</span>`;
+            const { error: uploadError } = await supabase.storage.from(DISH_IMAGE_BUCKET).upload(newStoragePath, optimizedFile, { contentType: "image/webp", upsert: false });
+            if (uploadError) throw uploadError;
+            const finalImageUrl = getDishPublicUrl(newStoragePath);
+            const { error: dbError } = await supabase.from("cuisines").update({ image_url: finalImageUrl }).eq("id", cuisine.id);
+            if (dbError) throw dbError;
+            const oldPath = storagePathFromUrl(cuisine.image_url);
+            if (oldPath) {
+              const { error: cleanupError } = await supabase.storage.from(DISH_IMAGE_BUCKET).remove([oldPath]);
+              if (cleanupError) console.warn("Failed to delete old cuisine image:", cleanupError);
+            }
+            showToast("Cuisine updated");
+            close();
+            await reload();
+          } catch (error) { button.disabled = false; statusNode.innerHTML = `<i class="ph ph-warning-circle"></i><span>${escapeHtml(error.message)}</span>`; }
+        }}
+      ]
+    });
+    modal.root.querySelector("#cuisine-image")?.addEventListener("change", e => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      const previewUrl = URL.createObjectURL(file);
+      const preview = modal.root.querySelector("#cuisine-preview");
+      preview.classList.remove("empty");
+      preview.innerHTML = `<img src="${previewUrl}" alt=""><div class="image-preview-copy"><strong>New image selected</strong><span>${escapeHtml(file.name)}</span></div>`;
+    });
   }
 
   function renderOverview() {
@@ -496,17 +620,17 @@ async function renderAdminWorkspace(mount) {
     const billRequests = sessions.filter(s => s.status === "bill_requested").length;
     area.innerHTML = `
       <section class="admin-hero"><div><span class="eyebrow">Control centre</span><h1>Everything in its place.</h1><p>Menu, tables, tax, UPI and table sessions in one restrained workspace.</p></div><div class="admin-hero-mark"><img src="${versionedAsset("assets/images/website_icon.png")}" alt=""></div></section>
-      <section class="metric-grid">${metricCard("ph-fork-knife", activeProducts, "Active dishes")}${metricCard("ph-table", activeTables, "Active tables")}${metricCard("ph-bell", sessions.length, "Open sessions")}${metricCard("ph-receipt", billRequests, "Bill requests")}</section>
+      <section class="metric-grid">${metricCard("ph-fork-knife", activeProducts, "Active dishes")}${metricCard("ph-armchair", activeTables, "Active tables")}${metricCard("ph-bell", sessions.length, "Open sessions")}${metricCard("ph-receipt", billRequests, "Bill requests")}</section>
       <section class="admin-grid-two">
-        <article class="admin-panel"><div class="panel-head"><div><span class="eyebrow">Quick actions</span><h2>Run the floor</h2></div></div><div class="quick-action-grid"><button class="quick-action" data-go="tables"><i class="ph ph-table"></i><span><strong>Manage tables</strong><small>Add, edit, delete and print QR codes.</small></span><i class="ph ph-arrow-right"></i></button><button class="quick-action" data-go="menu"><i class="ph ph-fork-knife"></i><span><strong>Manage menu</strong><small>Names, descriptions, prices and visibility.</small></span><i class="ph ph-arrow-right"></i></button><button class="quick-action" data-go="settings"><i class="ph ph-gear"></i><span><strong>Tax & UPI</strong><small>Keep server-side billing settings current.</small></span><i class="ph ph-arrow-right"></i></button></div></article>
-        <article class="admin-panel"><div class="panel-head"><div><span class="eyebrow">Dining sessions</span><h2>Open tables</h2></div><span class="soft-badge">${sessions.length} active</span></div><div class="session-mini-scroll">${sessions.length ? sessions.map(s => `<div class="admin-mini-row"><div class="mini-row-icon"><i class="ph ph-table"></i></div><div><strong>Table ${escapeHtml(tables.find(t => t.id === s.table_id)?.table_no ?? "—")}</strong><span>${s.status === "bill_requested" ? "Bill requested" : s.status === "bill_ready" ? "Bill ready" : "Dining session open"}</span></div><span class="session-status ${s.status}">${s.status === "bill_requested" ? "Action" : s.status === "bill_ready" ? "Ready" : "Open"}</span></div>`).join("") : `<div class="empty-state compact"><i class="ph ph-circle-wavy-check"></i><strong>No open table sessions</strong><span>The floor is currently clear.</span></div>`}</div></article>
+        <article class="admin-panel"><div class="panel-head"><div><span class="eyebrow">Quick actions</span><h2>Run the floor</h2></div></div><div class="quick-action-grid"><button class="quick-action" data-go="tables"><i class="ph ph-armchair"></i><span><strong>Manage tables</strong><small>Add, edit, delete and print QR codes.</small></span><i class="ph ph-arrow-right"></i></button><button class="quick-action" data-go="menu"><i class="ph ph-fork-knife"></i><span><strong>Manage menu</strong><small>Names, descriptions, prices and visibility.</small></span><i class="ph ph-arrow-right"></i></button><button class="quick-action" data-go="settings"><i class="ph ph-gear"></i><span><strong>Tax & UPI</strong><small>Keep server-side billing settings current.</small></span><i class="ph ph-arrow-right"></i></button></div></article>
+        <article class="admin-panel"><div class="panel-head"><div><span class="eyebrow">Dining sessions</span><h2>Open tables</h2></div><span class="soft-badge">${sessions.length} active</span></div><div class="session-mini-scroll">${sessions.length ? sessions.map(s => `<div class="admin-mini-row"><div class="mini-row-icon"><i class="ph ph-armchair"></i></div><div><strong>Table ${escapeHtml(tables.find(t => t.id === s.table_id)?.table_no ?? "—")}</strong><span>${s.status === "bill_requested" ? "Bill requested" : s.status === "bill_ready" ? "Bill ready" : "Dining session open"}</span></div><span class="session-status ${s.status}">${s.status === "bill_requested" ? "Action" : s.status === "bill_ready" ? "Ready" : "Open"}</span></div>`).join("") : `<div class="empty-state compact"><i class="ph ph-circle-wavy-check"></i><strong>No open table sessions</strong><span>The floor is currently clear.</span></div>`}</div></article>
       </section>`;
     area.querySelectorAll("[data-go]").forEach(b => b.addEventListener("click", () => { section = b.dataset.go; mount.querySelectorAll("[data-section]").forEach(el => el.classList.toggle("active", el.dataset.section === section)); renderSection(); }));
   }
 
   function renderMenu() {
     area.innerHTML = `
-      <section class="section-title-row"><div><span class="eyebrow">Menu management</span><h1>Every dish, neatly managed.</h1><p>Long lists stay inside a contained vertical workspace instead of stretching the entire page.</p></div><button class="btn btn-primary" id="add-product"><i class="ph ph-plus"></i>Add dish</button></section>
+      <section class="section-title-row"><div><span class="eyebrow">Menu management</span><h1>Every dish, neatly managed.</h1><p>Long lists stay inside a contained vertical workspace instead of stretching the entire page.</p></div><button class="btn btn-primary" id="add-product"><i class="ph-bold ph-plus"></i>Add dish</button></section>
       <section class="admin-panel"><div class="panel-toolbar"><div class="search-wrap light"><i class="ph ph-magnifying-glass"></i><input class="search-input" id="product-search" type="search" placeholder="Search dishes or categories"></div><span class="soft-badge">${products.length} dishes</span></div><div class="admin-list-scroll" id="product-list"></div></section>`;
     const search = area.querySelector("#product-search");
     const list = area.querySelector("#product-list");
@@ -522,13 +646,13 @@ async function renderAdminWorkspace(mount) {
 
   function renderTables() {
     area.innerHTML = `
-      <section class="section-title-row"><div><span class="eyebrow">Floor layout</span><h1>Tables without clutter.</h1><p>Manage table numbers, capacity, visibility and QR codes with custom in-site forms.</p></div><button class="btn btn-primary" id="add-table"><i class="ph ph-plus"></i>Add table</button></section>
+      <section class="section-title-row"><div><span class="eyebrow">Floor layout</span><h1>Tables without clutter.</h1><p>Manage table numbers, capacity, visibility and QR codes with custom in-site forms.</p></div><button class="btn btn-primary" id="add-table"><i class="ph-bold ph-plus"></i>Add table</button></section>
       <section class="admin-panel"><div class="panel-toolbar"><span class="soft-badge">${tables.length} tables</span><span class="panel-help">
   <i class="ph ph-qr-code"></i>
   Production QR · tff.vercel.app · table ID
 </span></div><div class="admin-table-scroll" id="table-list"></div></section>`;
     const list = area.querySelector("#table-list");
-    list.innerHTML = tables.length ? tables.map(t => `<article class="table-admin-card ${t.is_active ? "" : "inactive"}"><div class="table-number-badge"><span>TABLE</span><strong>${escapeHtml(t.table_no)}</strong></div><div class="table-card-main"><div><span class="eyebrow">Capacity</span><strong>${Number(t.capacity)} ${Number(t.capacity) === 1 ? "seat" : "seats"}</strong></div><span class="table-state ${t.is_active ? "active" : "inactive"}"><span></span>${t.is_active ? "Active" : "Hidden"}</span></div><div class="table-card-actions">${t.is_active ? `<button class="icon-btn icon-btn-light" data-qr="${t.id}" title="Table QR" aria-label="Table QR"><i class="ph ph-qr-code"></i></button>` : ""}<button class="icon-btn icon-btn-light" data-edit-table="${t.id}" title="Edit table" aria-label="Edit table"><i class="ph ph-pencil-simple"></i></button><button class="icon-btn icon-btn-danger" data-delete-table="${t.id}" title="Delete table" aria-label="Delete table"><i class="ph ph-trash"></i></button></div></article>`).join("") : `<div class="empty-state"><i class="ph ph-table"></i><strong>No tables yet</strong><span>Create the first table to generate a QR.</span></div>`;
+    list.innerHTML = tables.length ? tables.map(t => `<article class="table-admin-card ${t.is_active ? "" : "inactive"}"><div class="table-badge"><i class="ph-bold ph-armchair"></i><strong>${escapeHtml(t.table_no)}</strong></div><div class="table-card-main"><div><span class="eyebrow">Table ${escapeHtml(t.table_no)}</span><strong>${Number(t.capacity)} ${Number(t.capacity) === 1 ? "seat" : "seats"}</strong></div><span class="table-state ${t.is_active ? "active" : "inactive"}"><span></span>${t.is_active ? "Active" : "Hidden"}</span></div><div class="table-card-actions">${t.is_active ? `<button class="icon-btn icon-btn-light" data-qr="${t.id}" title="Table QR" aria-label="Table QR"><i class="ph-bold ph-qr-code"></i></button>` : ""}<button class="icon-btn icon-btn-light" data-edit-table="${t.id}" title="Edit table" aria-label="Edit table"><i class="ph-bold ph-pencil-simple"></i></button><button class="icon-btn icon-btn-danger" data-delete-table="${t.id}" title="Delete table" aria-label="Delete table"><i class="ph-bold ph-trash"></i></button></div></article>`).join("") : `<div class="empty-state"><i class="ph-bold ph-armchair"></i><strong>No tables yet</strong><span>Create the first table to generate a QR.</span></div>`;
     area.querySelector("#add-table").addEventListener("click", () => openTableEditor());
     list.addEventListener("click", e => {
       const edit = e.target.closest("[data-edit-table]");

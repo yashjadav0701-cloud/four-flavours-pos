@@ -12,9 +12,10 @@ export async function render({ mount, route }) {
   }
 
   const tableId = route.tableId;
-  const [tableResult, productsResult] = await Promise.all([
+  const [tableResult, productsResult, cuisinesResult] = await Promise.all([
     supabase.from("tables").select("id, table_no").eq("id", tableId).eq("is_active", true).maybeSingle(),
-    supabase.from("products").select("*").eq("is_active", true).order("sort_order", { ascending: true }).order("name", { ascending: true })
+    supabase.from("products").select("*").eq("is_active", true).order("sort_order", { ascending: true }).order("name", { ascending: true }),
+    supabase.from("cuisines").select("*").order("sort_order", { ascending: true })
   ]);
 
   if (tableResult.error) throw tableResult.error;
@@ -22,8 +23,7 @@ export async function render({ mount, route }) {
 
   const table = tableResult.data;
   const products = productsResult.data ?? [];
-  // Customer access is deliberately limited to menu/table data + secure RPCs.
-  // Restaurant branding is not fetched from the private app_settings table.
+  const cuisines = cuisinesResult.data ?? [];
   const restaurantName = DEFAULT_SETTINGS.restaurant_name;
 
   if (!table) {
@@ -39,8 +39,9 @@ export async function render({ mount, route }) {
   localStorage.setItem(sessionKey, session.session_token);
 
   const state = createPOSState({ orderType: "dine_in", tableId: table.id });
-  const categories = ["All", ...new Set(products.map(p => p.category).filter(Boolean))];
-  let activeCategory = "All";
+
+  let activeCuisine = null;
+  let activeSubCategory = "All";
   let sessionStatus = session.status || "open";
   let lastOrderNumber = null;
   let pollingTimer = null;
@@ -50,9 +51,11 @@ export async function render({ mount, route }) {
     <main class="customer-page">
       <header class="customer-topbar">
         <div class="customer-top-side"><span class="table-pill"><i class="ph ph-table"></i>Table ${escapeHtml(table.table_no)}</span></div>
-        <div class="customer-brand-center">
-          <div class="customer-brand-mark"><img src="${versionedAsset("assets/images/website_icon.png")}" alt=""></div>
-          <div class="customer-brand-name"><strong>${escapeHtml(restaurantName)}</strong><span>Freshly made. Thoughtfully served.</span></div>
+        <div class="customer-brand-center customer-main-logo">
+          <img
+            src="${versionedAsset("assets/images/website_logo.png")}"
+            alt="Four Flavours"
+          />
         </div>
         <div class="customer-top-side customer-top-side-right"><span class="live-indicator"><span class="live-dot"></span>Live menu</span></div>
       </header>
@@ -63,58 +66,185 @@ export async function render({ mount, route }) {
     lenis = new Lenis({ autoRaf: true, smoothWheel: true, lerp: 0.085 });
   }
 
+  function getSubCategoryIcon(subCat) {
+    const s = subCat.toLowerCase();
+    if (s.includes("starter") || s.includes("appetizer")) return "ph-bowl-food";
+    if (s.includes("main")) return "ph-cooking-pot";
+    if (s.includes("dessert") || s.includes("sweet")) return "ph-ice-cream";
+    if (s.includes("drink") || s.includes("beverage")) return "ph-wine";
+    if (s.includes("bread") || s.includes("roti")) return "ph-bread";
+    if (s.includes("rice") || s.includes("biryani")) return "ph-bowl-steam";
+    if (s.includes("soup")) return "ph-brandy";
+    if (s.includes("salad")) return "ph-carrot";
+    return "ph-fork-knife";
+  }
+
+  function getAvailableSubCategories() {
+    if (!activeCuisine) return [];
+    const subs = new Set();
+    products.forEach(p => {
+      const parts = String(p.category || "").split(" - ");
+      if (parts[0].trim() === activeCuisine) {
+        subs.add(parts[1]?.trim() || "Others");
+      }
+    });
+    return ["All", ...Array.from(subs)];
+  }
+
+  function getSubCategoryIcon(subCat) {
+    const s = subCat.toLowerCase();
+    if (s.includes("starter") || s.includes("appetizer")) return "ph-bowl-food";
+    if (s.includes("main")) return "ph-cooking-pot";
+    if (s.includes("dessert") || s.includes("sweet")) return "ph-ice-cream";
+    if (s.includes("drink") || s.includes("beverage")) return "ph-wine";
+    if (s.includes("bread") || s.includes("roti")) return "ph-bread";
+    if (s.includes("rice") || s.includes("biryani")) return "ph-bowl-steam";
+    if (s.includes("soup")) return "ph-brandy";
+    if (s.includes("salad")) return "ph-carrot";
+    return "ph-fork-knife";
+  }
+
+  function getAvailableSubCategories() {
+    if (!activeCuisine) return [];
+    const subs = new Set();
+    products.forEach(p => {
+      const parts = String(p.category || "").split(" - ");
+      if (parts[0].trim() === activeCuisine) {
+        subs.add(parts[1]?.trim() || "Others");
+      }
+    });
+    return ["All", ...Array.from(subs)];
+  }
+
   function renderMenu() {
     stopPolling();
     const stage = mount.querySelector("#customer-stage");
-    stage.innerHTML = `
-      <div class="customer-menu-shell">
-        <section class="customer-intro">
-          <div>
-            <span class="eyebrow">Welcome</span>
-            <h1>Choose what you'd love.</h1>
-            <p>Add dishes to your order. Your table has one dining session, so you can add another round later without creating another bill.</p>
+    
+    let html = `<div class="customer-menu-shell">`;
+
+    if (!activeCuisine) {
+      html += `
+        <div class="drill-down-header">
+          <h2>Choose a Cuisine</h2>
+        </div>
+        <div class="cuisine-hero-grid">
+          ${cuisines.map(c => `
+            <div class="cuisine-hero-card" data-cuisine="${escapeHtml(c.name)}">
+              <div class="cuisine-hero-bg">
+                ${c.image_url ? `<img src="${versionedAsset(c.image_url)}" alt="">` : `<div class="product-placeholder"><i class="ph ph-image"></i></div>`}
+              </div>
+              <div class="cuisine-hero-overlay">
+                <h3>${escapeHtml(c.name)}</h3>
+              </div>
+            </div>
+          `).join("")}
+        </div>
+      `;
+    } else {
+      const subCategories = getAvailableSubCategories();
+      html += `
+        <div class="sticky-subcat-wrap" id="sticky-subcat-wrap">
+          <div class="sticky-subcat-inner">
+            <div class="drill-down-header">
+              <button class="btn btn-quiet" id="btn-back-cuisines"><i class="ph ph-arrow-left"></i>Cuisines</button>
+              <h2>${escapeHtml(activeCuisine)}</h2>
+            </div>
+            <div class="sub-category-grid">
+              ${subCategories.map(sub => `
+                <button class="sub-category-tile ${activeSubCategory === sub ? "active" : ""}" data-sub="${escapeHtml(sub)}">
+                  <i class="ph-bold ${getSubCategoryIcon(sub)}"></i>
+                  <span>${escapeHtml(sub)}</span>
+                </button>
+              `).join("")}
+            </div>
           </div>
-          <div class="customer-service-note"><i class="ph ph-sparkle"></i><span>One table · one dining session · one final bill</span></div>
+        </div>
+        <section class="customer-product-scroll" id="customer-product-scroll">
+          <div class="customer-product-grid" id="customer-product-grid"></div>
         </section>
-        <section class="customer-category-list" id="customer-category-list" aria-label="Menu categories">
-          ${categories.map(category => `<button class="category-chip ${category === "All" ? "active" : ""}" data-category="${escapeHtml(category)}">${escapeHtml(category)}</button>`).join("")}
-        </section>
-        <section class="customer-product-scroll" id="customer-product-scroll"><div class="customer-product-grid" id="customer-product-grid"></div></section>
-      </div>
+      `;
+    }
+
+    html += `</div>
       <div class="customer-order-bar">
         <div class="customer-order-bar-copy"><div class="order-count-icon"><i class="ph ph-shopping-bag"></i></div><div><strong id="customer-cart-count">0 items</strong><span>Ready for review</span></div></div>
         <button class="btn btn-primary btn-review" id="customer-review" disabled title="Review your order"><span>Next</span><i class="ph ph-arrow-right"></i></button>
       </div>`;
+    
+    stage.innerHTML = html;
 
-    renderProducts();
-
-    stage.querySelector("#customer-category-list").addEventListener("click", event => {
-      const button = event.target.closest("[data-category]");
-      if (!button) return;
-      activeCategory = button.dataset.category;
-      stage.querySelectorAll("[data-category]").forEach(el => el.classList.toggle("active", el === button));
+    if (activeCuisine) {
       renderProducts();
-    });
+      
+      stage.querySelector("#btn-back-cuisines")?.addEventListener("click", () => {
+        activeCuisine = null;
+        activeSubCategory = "All";
+        renderMenu();
+      });
 
-    stage.querySelector("#customer-product-grid").addEventListener("click", event => {
-      const button = event.target.closest("[data-product]");
-      if (!button) return;
-      const product = products.find(item => item.id === button.dataset.product);
-      if (!product) return;
-      state.addProduct(product);
-      button.classList.add("pressed");
-      setTimeout(() => button.classList.remove("pressed"), 220);
-    });
+      stage.querySelectorAll("[data-sub]").forEach(btn => {
+        btn.addEventListener("click", () => {
+          activeSubCategory = btn.dataset.sub;
+          renderMenu(); 
+        });
+      });
 
-    stage.querySelector("#customer-review").addEventListener("click", openReview);
-    state.subscribe(renderOrderBar);
+      stage.querySelector("#customer-product-grid")?.addEventListener("click", event => {
+        const add = event.target.closest("[data-product-add]");
+        const inc = event.target.closest("[data-product-inc]");
+        const dec = event.target.closest("[data-product-dec]");
+        if (add) { const product = products.find(item => item.id === add.dataset.productAdd); if (product) { state.addProduct(product); animateProductControl(add); } return; }
+        if (inc) { state.increment(inc.dataset.productInc); animateProductControl(inc); return; }
+        if (dec) { state.decrement(dec.dataset.productDec); animateProductControl(dec); }
+      });
+
+      const scroller = stage.querySelector("#customer-product-scroll");
+      if (scroller) {
+        let lastScroll = 0;
+        scroller.addEventListener("scroll", e => {
+          const wrap = stage.querySelector("#sticky-subcat-wrap");
+          if (!wrap) return;
+          const current = e.target.scrollTop;
+          if (current > lastScroll && current > 40) wrap.classList.add("hidden-up");
+          else if (current < lastScroll) wrap.classList.remove("hidden-up");
+          lastScroll = current;
+        });
+      }
+    } else {
+      stage.querySelectorAll("[data-cuisine]").forEach(card => {
+        card.addEventListener("click", () => {
+          activeCuisine = card.dataset.cuisine;
+          activeSubCategory = "All";
+          renderMenu();
+        });
+      });
+    }
+
+    stage.querySelector("#customer-review")?.addEventListener("click", openReview);
     renderOrderBar(state.getState());
+  }
+
+  if (!mount._hasSubscribed) {
+    state.subscribe(current => {
+      renderOrderBar(current);
+      renderProductQuantities(current);
+    });
+    mount._hasSubscribed = true;
   }
 
   function renderProducts() {
     const grid = mount.querySelector("#customer-product-grid");
     if (!grid) return;
-    const visible = products.filter(product => activeCategory === "All" || product.category === activeCategory);
+    const visible = products.filter(p => {
+      const parts = String(p.category || "").split(" - ");
+      const pCuisine = parts[0].trim();
+      const pSub = parts[1]?.trim() || "Others";
+      
+      if (activeCuisine && pCuisine !== activeCuisine) return false;
+      if (activeSubCategory !== "All" && pSub !== activeSubCategory) return false;
+      return true;
+    });
+
     grid.innerHTML = visible.length ? visible.map(product => `
       <article class="customer-product-card">
         <div class="customer-product-media">
@@ -122,11 +252,110 @@ export async function render({ mount, route }) {
           <span class="product-category-tag">${escapeHtml(product.category ?? "")}</span>
         </div>
         <div class="customer-product-copy">
-          <div class="customer-product-top"><h2>${escapeHtml(product.name)}</h2><strong>${money(product.price)}</strong></div>
+          <div class="customer-product-top">
+            <h2>${escapeHtml(product.name)}</h2>
+            <strong>${money(product.price)}</strong>
+          </div>
           <p>${escapeHtml(product.description || "Freshly prepared in the Four Flavours kitchen.")}</p>
-          <button class="product-add-btn" data-product="${product.id}" aria-label="Add ${escapeHtml(product.name)}" title="Add to order"><i class="ph ph-plus"></i></button>
+          <div class="customer-product-bottom">
+            <span class="customer-qty-control" data-product-control="${product.id}"></span>
+          </div>
         </div>
-      </article>`).join("") : `<div class="empty-state"><i class="ph ph-magnifying-glass"></i><strong>No dishes found</strong><span>Try another category.</span></div>`;
+      </article>
+    `).join("") : `<div class="empty-state"><i class="ph ph-magnifying-glass"></i><strong>No dishes found</strong><span>Try another category.</span></div>`;
+
+    // Restart the CSS animation to show loading flash
+    grid.classList.remove("grid-refresh-anim");
+    void grid.offsetWidth; // Force a reflow
+    grid.classList.add("grid-refresh-anim");
+
+    renderProductQuantities();
+  }
+
+  function renderProductQuantities(current = state.getState()) {
+    const quantities = new Map(
+      current.items.map(item => [
+        item.id,
+        item.quantity
+      ])
+    );
+
+    mount
+      .querySelectorAll("[data-product-control]")
+      .forEach(control => {
+        const productId =
+          control.dataset.productControl;
+
+        const quantity =
+          quantities.get(productId) ?? 0;
+
+        if (quantity <= 0) {
+          control.className =
+            "customer-qty-control";
+
+          control.innerHTML = `
+            <button
+              class="product-add-btn-single"
+              data-product-add="${productId}"
+              title="Add to order"
+              aria-label="Add to order"
+            >
+              <i class="ph ph-plus"></i>
+            </button>
+          `;
+
+          return;
+        }
+
+        control.className =
+          "customer-qty-control is-active";
+
+        control.innerHTML = `
+          <button
+            class="product-qty-btn"
+            data-product-dec="${productId}"
+            title="Decrease quantity"
+            aria-label="Decrease quantity"
+          >
+            <i class="ph ph-minus"></i>
+          </button>
+
+          <span
+            class="product-qty-value"
+            aria-live="polite"
+          >
+            ${quantity}
+          </span>
+
+          <button
+            class="product-qty-btn"
+            data-product-inc="${productId}"
+            title="Increase quantity"
+            aria-label="Increase quantity"
+          >
+            <i class="ph ph-plus"></i>
+          </button>
+        `;
+      });
+  }
+
+  function animateProductControl(element) {
+    const control =
+      element.closest(
+        "[data-product-control]"
+      );
+
+    if (!control) return;
+
+    control.classList.remove(
+      "qty-pulse"
+    );
+
+    void control.offsetWidth;
+
+    control.classList.add(
+      "qty-pulse"
+    );
   }
 
   function renderOrderBar(current) {

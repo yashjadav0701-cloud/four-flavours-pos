@@ -148,7 +148,7 @@ Admin:
 #/4
 
 Customer table menu:
-?table=<TABLE_UUID>
+https://tff.vercel.app/?table=<TABLE_UUID>
 ```
 
 `Ctrl+F` routes staff/admin users to `#/4`. The customer QR experience does
