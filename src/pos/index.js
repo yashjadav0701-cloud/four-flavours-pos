@@ -103,9 +103,40 @@ export async function render({ mount }) {
         </div>
       </header>
       
-      <div class="pos-search-overlay" id="pos-search-overlay">
-        <i class="ph ph-magnifying-glass"></i>
-        <input id="pos-search" class="search-input" type="search" placeholder="Search dishes..." autocomplete="off">
+      <div class="pos-search-backdrop" id="pos-search-overlay" style="z-index: 99999;" onclick="this.classList.remove('active');">
+        <div class="pos-search-panel" onclick="event.stopPropagation();">
+          <div class="search-bar-row">
+            <div class="search-input-wrap">
+              <i class="ph-bold ph-magnifying-glass"></i>
+              <input id="pos-search" class="search-input" type="search" placeholder="Search dishes or categories..." autocomplete="off" oninput="document.getElementById('search-suggestions-area').style.display = this.value.trim() ? 'none' : 'block';" onkeydown="if(event.key === 'Enter') document.getElementById('pos-search-overlay').classList.remove('active');">
+            </div>
+            <button class="btn btn-quiet" id="pos-search-cancel" onclick="document.getElementById('pos-search-overlay').classList.remove('active'); const i = document.getElementById('pos-search'); i.value = ''; i.dispatchEvent(new Event('input')); document.getElementById('search-suggestions-area').style.display = 'block';" style="padding: 0 12px; border: none; background: transparent; color: var(--forest-900); font-weight: 800;">Cancel</button>
+          </div>
+          
+          <div id="search-suggestions-area">
+            <div class="search-group-title">Recommended</div>
+            <div class="search-tags">
+              <button class="search-tag" onclick="const i = document.getElementById('pos-search'); i.value = 'Paneer'; i.dispatchEvent(new Event('input')); document.getElementById('pos-search-overlay').classList.remove('active');"><i class="ph ph-trend-up"></i> Paneer</button>
+              <button class="search-tag" onclick="const i = document.getElementById('pos-search'); i.value = 'Soup'; i.dispatchEvent(new Event('input')); document.getElementById('pos-search-overlay').classList.remove('active');"><i class="ph ph-fire"></i> Soups</button>
+              <button class="search-tag" onclick="const i = document.getElementById('pos-search'); i.value = 'Noodles'; i.dispatchEvent(new Event('input')); document.getElementById('pos-search-overlay').classList.remove('active');"><i class="ph ph-star"></i> Noodles</button>
+              <button class="search-tag" onclick="const i = document.getElementById('pos-search'); i.value = 'Rice'; i.dispatchEvent(new Event('input')); document.getElementById('pos-search-overlay').classList.remove('active');"><i class="ph ph-bowl-food"></i> Rice</button>
+            </div>
+            
+            <div class="search-group-title">Recently Ordered</div>
+            <div class="search-list">
+              <button class="search-list-item" onclick="const i = document.getElementById('pos-search'); i.value = 'Manchow'; i.dispatchEvent(new Event('input')); document.getElementById('pos-search-overlay').classList.remove('active');">
+                <i class="ph-bold ph-clock-counter-clockwise"></i>
+                <span>Veg Manchow Soup</span>
+                <small>₹169</small>
+              </button>
+              <button class="search-list-item" onclick="const i = document.getElementById('pos-search'); i.value = 'Tikka'; i.dispatchEvent(new Event('input')); document.getElementById('pos-search-overlay').classList.remove('active');">
+                <i class="ph-bold ph-clock-counter-clockwise"></i>
+                <span>Paneer Tikka</span>
+                <small>₹289</small>
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
 
       <main class="pos-content">

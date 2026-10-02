@@ -530,7 +530,7 @@ async function renderAdminWorkspace(mount) {
       </header>
 
       <nav class="admin-section-nav" id="admin-section-nav" aria-label="Management sections">
-        <button data-section="overview" class="active"><i class="ph-bold ph-squares-four"></i><span>Overview</span></button>
+        <button data-section="overview" class="active"><i class="ph-fill ph-squares-four"></i><span>Overview</span></button>
         <button data-section="orders"><i class="ph-bold ph-receipt"></i><span>Orders</span></button>
         <button data-section="cuisines"><i class="ph-bold ph-image"></i><span>Cuisines</span></button>
         <button data-section="menu"><i class="ph-bold ph-fork-knife"></i><span>Menu</span></button>
@@ -543,18 +543,29 @@ async function renderAdminWorkspace(mount) {
   const navCleanup = mountNavigation({ active: "admin" });
   const area = mount.querySelector("#admin-area");
 
+  // Dynamically swaps hollow icons to filled icons for the active tab
+  function updateNavUI() {
+    mount.querySelectorAll("[data-section]").forEach(el => {
+      const isActive = el.dataset.section === section;
+      el.classList.toggle("active", isActive);
+      const icon = el.querySelector("i");
+      if (icon) {
+        if (isActive) icon.className = icon.className.replace("ph-bold", "ph-fill").replace(" ph ", " ph-fill ");
+        else icon.className = icon.className.replace("ph-fill", "ph-bold");
+      }
+    });
+  }
+
   mount.querySelector("#admin-menu").addEventListener("click", () => window.__FOUR_FLAVOURS_NAV__?.open());
   
   mount.querySelector("#admin-refresh").addEventListener("click", async (e) => { 
     const btn = e.currentTarget;
     const icon = btn.querySelector("i");
     
-    // 1. Create a full-page overlay to block all clicks
     const blocker = document.createElement("div");
     blocker.className = "full-page-blocker";
     document.body.appendChild(blocker);
     
-    // 2. Animate the button
     btn.disabled = true;
     icon.classList.add("icon-spin");
     
@@ -564,7 +575,6 @@ async function renderAdminWorkspace(mount) {
     } catch (err) {
       showToast("Refresh failed", err.message, "error");
     } finally {
-      // 3. Remove blocker and stop animation
       icon.classList.remove("icon-spin");
       btn.disabled = false;
       blocker.remove();
@@ -575,7 +585,7 @@ async function renderAdminWorkspace(mount) {
     const b = event.target.closest("[data-section]");
     if (!b) return;
     section = b.dataset.section;
-    mount.querySelectorAll("[data-section]").forEach(el => el.classList.toggle("active", el === b));
+    updateNavUI();
     renderSection();
   });
 
@@ -874,7 +884,7 @@ async function renderAdminWorkspace(mount) {
         </div></article>
       </section>`;
     
-    area.querySelectorAll("[data-go]").forEach(b => b.addEventListener("click", () => { section = b.dataset.go; mount.querySelectorAll("[data-section]").forEach(el => el.classList.toggle("active", el.dataset.section === section)); renderSection(); }));
+    area.querySelectorAll("[data-go]").forEach(b => b.addEventListener("click", () => { section = b.dataset.go; updateNavUI(); renderSection(); }));
     
     area.querySelector("#overview-session-list")?.addEventListener("click", e => {
       const row = e.target.closest("[data-manage-session]");
@@ -1185,7 +1195,43 @@ async function renderAdminWorkspace(mount) {
   }
 
   function renderSettings() {
-    area.innerHTML = `<section class="section-title-row"><div><span class="eyebrow">Restaurant settings</span><h1>Keep the bill precise.</h1><p>The final tax and total are calculated on the database, not trusted from the browser.</p></div></section><section class="admin-panel settings-panel"><form id="settings-form" class="settings-form-grid"><label class="field"><span>Restaurant name</span><input class="field-input" name="restaurant_name" value="${escapeHtml(settings.restaurant_name)}" required></label><label class="field"><span>UPI ID</span><input class="field-input" name="upi_id" value="${escapeHtml(settings.upi_id || "")}" placeholder="fourflavours@upi"></label><label class="field"><span>GSTIN (GST Number)</span><input class="field-input" name="gst_number" value="${escapeHtml(settings.gst_number || "")}" placeholder="22AAAAA0000A1Z5"></label><label class="field settings-wide"><span>Restaurant Address (Prints on Bill)</span><textarea class="field-input textarea-input" name="restaurant_address" placeholder="123 Food Street, City, State" rows="2">${escapeHtml(settings.restaurant_address || "")}</textarea></label><label class="field"><span>CGST %</span><input class="field-input" name="cgst_rate" type="number" min="0" max="100" step="0.01" value="${Number(settings.cgst_rate)}" required></label><label class="field"><span>SGST %</span><input class="field-input" name="sgst_rate" type="number" min="0" max="100" step="0.01" value="${Number(settings.sgst_rate)}" required></label><label class="field settings-wide"><span>Receipt footer</span><input class="field-input" name="receipt_footer" value="${escapeHtml(settings.receipt_footer || "")}"></label><div class="settings-wide settings-preview"><div class="settings-preview-icon"><i class="ph ph-shield-check"></i></div><div><strong>Secure calculation</strong><span>Prices, tax rates and the final total are recalculated by PostgreSQL when the order is created.</span></div></div><div class="settings-wide"><button class="btn btn-primary" type="submit"><i class="ph ph-floppy-disk"></i>Save settings</button></div></form></section>`;
+    area.innerHTML = `
+      <section class="section-title-row" style="flex-direction: row !important; justify-content: space-between !important; align-items: flex-end !important; text-align: left !important;">
+        <div style="align-items: flex-start !important; text-align: left !important;">
+          <span class="eyebrow">Restaurant settings</span>
+          <h1 style="text-align: left !important; margin: 6px 0;">Keep the bill precise.</h1>
+          <p style="text-align: left !important;">Database-verified tax and totals.</p>
+        </div>
+        <button class="btn btn-danger" id="admin-sign-out" style="flex-shrink: 0;"><i class="ph-bold ph-sign-out"></i>Sign out</button>
+      </section>
+      <section class="admin-panel settings-panel">
+        <form id="settings-form" class="settings-form-grid">
+          <label class="field"><span>Restaurant name</span><input class="field-input" name="restaurant_name" value="${escapeHtml(settings.restaurant_name)}" required></label>
+          <label class="field"><span>UPI ID</span><input class="field-input" name="upi_id" value="${escapeHtml(settings.upi_id || "")}" placeholder="fourflavours@upi"></label>
+          <label class="field"><span>GSTIN (GST Number)</span><input class="field-input" name="gst_number" value="${escapeHtml(settings.gst_number || "")}" placeholder="22AAAAA0000A1Z5"></label>
+          <label class="field settings-wide"><span>Restaurant Address (Prints on Bill)</span><textarea class="field-input textarea-input" name="restaurant_address" placeholder="123 Food Street, City, State" rows="2">${escapeHtml(settings.restaurant_address || "")}</textarea></label>
+          <label class="field"><span>CGST %</span><input class="field-input" name="cgst_rate" type="number" min="0" max="100" step="0.01" value="${Number(settings.cgst_rate)}" required></label>
+          <label class="field"><span>SGST %</span><input class="field-input" name="sgst_rate" type="number" min="0" max="100" step="0.01" value="${Number(settings.sgst_rate)}" required></label>
+          <label class="field settings-wide"><span>Receipt footer</span><input class="field-input" name="receipt_footer" value="${escapeHtml(settings.receipt_footer || "")}"></label>
+          <div class="settings-wide settings-preview"><div class="settings-preview-icon"><i class="ph ph-shield-check"></i></div><div><strong>Secure calculation</strong><span>Prices, tax rates and the final total are recalculated by PostgreSQL when the order is created.</span></div></div>
+          <div class="settings-wide"><button class="btn btn-primary" type="submit"><i class="ph ph-floppy-disk"></i>Save settings</button></div>
+        </form>
+      </section>`;
+
+    area.querySelector("#admin-sign-out").addEventListener("click", async (e) => {
+      const btn = e.currentTarget;
+      btn.innerHTML = `<i class="ph ph-spinner-gap ph-spin"></i><span>Signing out...</span>`;
+      btn.disabled = true;
+      try {
+        await supabase.auth.signOut();
+        window.location.href = "/";
+      } catch (error) {
+        showToast("Sign out failed", error.message, "error");
+        btn.innerHTML = `<i class="ph-bold ph-sign-out"></i>Sign out`;
+        btn.disabled = false;
+      }
+    });
+
     area.querySelector("#settings-form").addEventListener("submit", async e => {
       e.preventDefault(); const fd = new FormData(e.currentTarget);
       const payload = { 

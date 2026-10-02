@@ -30,7 +30,6 @@ export function mountNavigation({ active = "pos" }) {
         <button class="drawer-nav-item ${active === "pos" ? "active" : ""}" data-route="/"><i class="ph ph-storefront"></i><span>POS</span></button>
         <button class="drawer-nav-item ${active === "admin" ? "active" : ""}" data-route="#/4"><i class="ph ph-shield-check"></i><span>Admin</span></button>
       </nav>
-      <div class="drawer-foot"><button class="drawer-nav-item danger" data-logout><i class="ph ph-sign-out"></i><span>Sign out</span></button></div>
     </aside>`;
   document.body.appendChild(root);
 
@@ -49,15 +48,6 @@ export function mountNavigation({ active = "pos" }) {
       return;
     }
     if (event.target.closest("[data-close-drawer]") || event.target.closest("[data-drawer-overlay]")) { setOpen(false); return; }
-    if (event.target.closest("[data-logout]")) {
-      try {
-        await signOut();
-        setOpen(false);
-        history.pushState({}, "", location.pathname);
-        location.hash = "";
-        window.dispatchEvent(new Event("fourflavours:navigate"));
-      } catch (error) { showToast("Sign out failed", error.message, "error"); }
-    }
   });
 
   window.__FOUR_FLAVOURS_NAV__ = { open: () => setOpen(true), close: () => setOpen(false), toggle: () => setOpen(!drawer.classList.contains("open")) };
