@@ -100,7 +100,7 @@ button,input,select,textarea{font:inherit}button{border:0}button:disabled{cursor
 .error-screen{background:var(--cream-100)}.error-card{width:min(460px,100%);padding:28px;border:1px solid var(--line);border-radius:var(--radius-xl);background:var(--paper);box-shadow:var(--shadow-strong);text-align:center}.error-card>i{font-size:42px;color:var(--danger)}.error-card h1{margin:14px 0 7px;font-size:1.5rem}.error-card p{margin:0 0 20px;color:var(--muted)}
 
 /* Drawer */
-.drawer-overlay{position:fixed;inset:0;z-index:90;background:rgba(9,22,11,.52);opacity:0;pointer-events:none;transition:opacity 180ms ease}.drawer-overlay.open{opacity:1;pointer-events:auto}.app-drawer{position:fixed;inset:0 auto 0 0;z-index:100;width:min(320px,86vw);display:grid;grid-template-rows:auto 1fr auto;transform:translateX(-104%);background:var(--forest-950);color:#fff;border-right:1px solid rgba(255,255,255,.08);box-shadow:28px 0 80px rgba(3,14,7,.28);transition:transform 220ms cubic-bezier(.2,.8,.2,1)}.app-drawer.open{transform:translateX(0)}.drawer-head{min-height:82px;display:flex;align-items:center;gap:11px;padding:15px;border-bottom:1px solid rgba(255,255,255,.08)}.drawer-head>img{width:42px;height:42px;border-radius:12px;object-fit:cover;background:#fff}.drawer-head>div{flex:1}.drawer-head strong,.drawer-head small{display:block}.drawer-head small{margin-top:4px;color:#a9b6aa;font-size:.71rem}.drawer-nav{display:grid;align-content:start;gap:6px;padding:13px}.drawer-nav-item{width:100%;min-height:48px;display:flex;align-items:center;gap:11px;padding:0 13px;border:1px solid transparent;border-radius:11px;background:transparent;color:#bdc7be;font-weight:800;text-align:left}.drawer-nav-item:hover,.drawer-nav-item.active{color:#fff;border-color:rgba(255,255,255,.08);background:rgba(255,255,255,.05)}.drawer-nav-item.active{box-shadow:inset 3px 0 0 var(--gold-500)}.drawer-nav-item i{font-size:20px}.drawer-nav-item.danger{color:#eaa7a3}.drawer-foot{padding:13px;border-top:1px solid rgba(255,255,255,.08)}
+.drawer-overlay{position:fixed;inset:0;z-index:90;background:rgba(9,22,11,.52);opacity:0;pointer-events:none;transition:opacity 180ms ease}.drawer-overlay.open{opacity:1;pointer-events:auto}.app-drawer{position:fixed;inset:0 auto 0 0;z-index:100;width:min(320px,86vw);display:grid;grid-template-rows:auto 1fr auto;transform:translateX(-104%);background:var(--forest-950);color:#fff;border-right:1px solid rgba(255,255,255,.08);box-shadow:none;transition:transform 220ms cubic-bezier(.2,.8,.2,1);visibility:hidden}.app-drawer.open{transform:translateX(0);box-shadow:28px 0 80px rgba(3,14,7,.28);visibility:visible}.drawer-head{min-height:82px;display:flex;align-items:center;gap:11px;padding:15px;border-bottom:1px solid rgba(255,255,255,.08)}.drawer-head>img{width:42px;height:42px;border-radius:12px;object-fit:cover;background:#fff}.drawer-head>div{flex:1}.drawer-head strong,.drawer-head small{display:block}.drawer-head small{margin-top:4px;color:#a9b6aa;font-size:.71rem}.drawer-nav{display:grid;align-content:start;gap:6px;padding:13px}.drawer-nav-item{width:100%;min-height:48px;display:flex;align-items:center;gap:11px;padding:0 13px;border:1px solid transparent;border-radius:11px;background:transparent;color:#bdc7be;font-weight:800;text-align:left}.drawer-nav-item:hover,.drawer-nav-item.active{color:#fff;border-color:rgba(255,255,255,.08);background:rgba(255,255,255,.05)}.drawer-nav-item.active{box-shadow:inset 3px 0 0 var(--gold-500)}.drawer-nav-item i{font-size:20px}.drawer-nav-item.danger{color:#eaa7a3}.drawer-foot{padding:13px;border-top:1px solid rgba(255,255,255,.08)}
 
 /* POS */
 .pos-page{min-height:100vh;background:#eef2eb}.pos-topbar{color:#fff;background:var(--forest-950);border-bottom:1px solid rgba(255,255,255,.07)}.pos-brand-center .brand-wordmark strong,.pos-brand-center .brand-wordmark span{color:#fff}.pos-brand-center .brand-wordmark span{color:#a8b4aa}
@@ -113,10 +113,19 @@ button,input,select,textarea{font:inherit}button{border:0}button:disabled{cursor
 .drill-down-header .btn-quiet { min-height: 38px; padding: 0 12px; border-radius: 10px; }
 .drill-down-header h2 { margin: 0; font-size: 1.1rem; letter-spacing: -0.01em; color: var(--forest-900); }
 
-.cuisine-hero-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-bottom: 18px; }
-.cuisine-hero-card { position: relative; aspect-ratio: 3/4; border-radius: 16px; overflow: hidden; border: 1px solid var(--line); cursor: pointer; box-shadow: var(--shadow-soft); transition: transform 160ms ease, border-color 160ms ease; background: var(--sage-100); }
-.cuisine-hero-bg { position: absolute; inset: 0; }
-.cuisine-hero-bg img { width: 100%; height: 100%; object-fit: contain; object-position: center; }
+.cuisine-hero-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-bottom: 18px; }
+.cuisine-hero-card { position: relative; aspect-ratio: 2/3; border-radius: 16px; overflow: hidden; border: 1px solid var(--line); cursor: pointer; box-shadow: var(--shadow-soft); transition: transform 150ms ease, border-color 150ms ease, box-shadow 150ms ease; background: var(--sage-100); }
+
+/* PC Hover Lift & Glow */
+.cuisine-hero-card:hover { transform: translateY(-4px); border-color: var(--forest-500); box-shadow: 0 12px 28px rgba(76,110,75,0.25); }
+
+/* Mobile Tap Animation (Physically presses the button down) */
+.cuisine-hero-card.pressed { transform: scale(0.95) !important; box-shadow: 0 4px 10px rgba(0,0,0,0.1) !important; border-color: var(--forest-600) !important; }
+
+/* Image zoom effect on hover/press */
+.cuisine-hero-bg { position: absolute; inset: 0; transition: transform 300ms ease; }
+.cuisine-hero-card:hover .cuisine-hero-bg, .cuisine-hero-card.pressed .cuisine-hero-bg { transform: scale(1.06); }
+.cuisine-hero-bg img { width: 100%; height: 100%; object-fit: cover; object-position: center; }
 .cuisine-hero-overlay { position: absolute; inset: 0; background: linear-gradient(to top, rgba(18,34,22,0.92) 0%, rgba(18,34,22,0.3) 40%, transparent 100%); display: flex; align-items: flex-end; padding: 14px; }
 .cuisine-hero-overlay h3 { color: #fff; margin: 0; font-size: 1.1rem; letter-spacing: -0.01em; text-shadow: 0 2px 8px rgba(0,0,0,0.4); }
 
@@ -1272,8 +1281,8 @@ button,input,select,textarea{font:inherit}button{border:0}button:disabled{cursor
 
 /* --- Native App Scroll Lock (Universal Sticky Headers) --- */
 html, body {
-  overscroll-behavior-y: none;
-  overflow: hidden !important; /* Total lock: prevents ALL browser-level scrolling */
+  overscroll-behavior-y: auto; /* Restores the native browser pull-to-refresh action */
+  overflow: hidden !important; /* Keeps the outer frame locked so double-scroll doesn't happen */
 }
 
 /* 1. Pin ALL page wrappers to the exact screen edges */
@@ -1340,7 +1349,7 @@ html, body {
   overflow-x: hidden !important;
   padding-bottom: 140px !important; /* Massive space for the final row */
   -webkit-overflow-scrolling: touch !important;
-  overscroll-behavior-y: contain !important;
+  overscroll-behavior-y: auto !important; /* Allows the scroll physics to chain up to trigger refresh */
 }
 
 @media (max-width: 1100px) {
@@ -1935,3 +1944,105 @@ html, body {
   }
 }
 
+/* --- Premium Product Hover Zoom --- */
+.pos-product-media img {
+  transition: transform 350ms cubic-bezier(0.2, 0.8, 0.2, 1) !important;
+}
+.pos-product-card:hover .pos-product-media img, 
+.pos-product-card:active .pos-product-media img {
+  transform: scale(1.12) !important;
+}
+
+/* --- Premium Expanding Qty Button --- */
+.premium-qty-wrapper {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  background: var(--sage-100);
+  overflow: hidden;
+  border: 1px solid var(--line);
+  transition: width 0.35s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.3s, border-color 0.3s;
+  position: relative;
+}
+
+.premium-qty-wrapper.is-active {
+  width: 96px;
+  background: var(--paper);
+  border-color: var(--sage-300);
+}
+
+.premium-qty-btn {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  background: transparent;
+  color: var(--forest-900);
+  flex-shrink: 0;
+  transition: all 0.3s ease;
+  border-radius: 0;
+  z-index: 2;
+  cursor: pointer;
+}
+
+.premium-qty-value {
+  position: absolute;
+  left: 32px;
+  width: 32px;
+  text-align: center;
+  font-size: 0.85rem;
+  font-weight: 900;
+  color: var(--forest-900);
+  opacity: 0;
+  transition: opacity 0.3s ease, transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transform: scale(0.5);
+  user-select: none;
+  z-index: 1;
+}
+
+.premium-qty-wrapper.is-active .premium-qty-value {
+  opacity: 1;
+  transform: scale(1);
+}
+
+/* The Minus Button unrolls and spins in from the left */
+.dec-btn {
+  position: absolute;
+  left: 0;
+  transform: translateX(-100%) rotate(-180deg);
+  opacity: 0;
+}
+.premium-qty-wrapper.is-active .dec-btn {
+  transform: translateX(0) rotate(0);
+  opacity: 1;
+  background: var(--forest-900);
+  color: #fff;
+}
+
+/* The Plus Button stays anchored right and changes color */
+.inc-btn {
+  position: absolute;
+  right: 0;
+  border-radius: 9px;
+}
+.premium-qty-wrapper.is-active .inc-btn {
+  background: var(--forest-900);
+  color: #fff;
+  border-radius: 0;
+}
+.premium-qty-wrapper:not(.is-active):hover .inc-btn {
+  background: var(--sage-200);
+}
+
+/* Enhances the click-pulse effect to match the new button */
+.qty-pulse {
+  animation: premium-pulse 250ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+@keyframes premium-pulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.08); }
+  100% { transform: scale(1); }
+}

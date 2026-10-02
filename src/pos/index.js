@@ -323,14 +323,21 @@ export async function render({ mount }) {
 
       area.querySelectorAll("[data-cuisine]").forEach(card => {
         card.addEventListener("click", () => {
-          activeCuisine = card.dataset.cuisine;
-          activeSubCategory = "All";
-          searchTerm = "";
-          mount.querySelector("#pos-search").value = "";
+          // 1. Add the tactile animation class immediately
+          card.classList.add("pressed");
           
-          // Push navigation state so the physical back button works
-          window.history.pushState({ view: "cuisine", cuisine: activeCuisine }, "", "#" + encodeURIComponent(activeCuisine));
-          renderProducts();
+          // 2. Wait exactly 150ms for the physical "press" animation to visually complete
+          setTimeout(() => {
+            activeCuisine = card.dataset.cuisine;
+            activeSubCategory = "All";
+            searchTerm = "";
+            const searchInput = mount.querySelector("#pos-search");
+            if (searchInput) searchInput.value = "";
+            
+            // Push navigation state so the physical back button works
+            window.history.pushState({ view: "cuisine", cuisine: activeCuisine }, "", "#" + encodeURIComponent(activeCuisine));
+            renderProducts();
+          }, 150);
         });
       });
       return;
@@ -431,7 +438,11 @@ export async function render({ mount }) {
           ${product.description ? `<p class="pos-product-desc">${escapeHtml(product.description)}</p>` : ""}
           <div class="pos-product-bottom">
             <b>${money(product.price, settings.currency_symbol)}</b>
-            <span class="product-qty-control" data-product-control="${product.id}"></span>
+            <div class="premium-qty-wrapper" data-product-control="${product.id}">
+              <button class="premium-qty-btn dec-btn" data-product-dec="${product.id}" title="Decrease"><i class="ph ph-minus"></i></button>
+              <span class="premium-qty-value" aria-live="polite">0</span>
+              <button class="premium-qty-btn inc-btn" data-product-add="${product.id}" title="Add"><i class="ph ph-plus"></i></button>
+            </div>
           </div>
         </div>
       </article>
@@ -487,27 +498,15 @@ export async function render({ mount }) {
     mount.querySelectorAll("[data-product-control]").forEach(control => {
       const productId = control.dataset.productControl;
       const quantity = quantities.get(productId) ?? 0;
+      const valSpan = control.querySelector(".premium-qty-value");
 
       if (quantity <= 0) {
-        control.className = "product-qty-control";
-        control.innerHTML = `
-          <button class="product-add-btn-single" data-product-add="${productId}" title="Add to order" aria-label="Add to order">
-            <i class="ph ph-plus"></i>
-          </button>
-        `;
-        return;
+        control.classList.remove("is-active");
+        if (valSpan) valSpan.textContent = "0";
+      } else {
+        control.classList.add("is-active");
+        if (valSpan) valSpan.textContent = quantity;
       }
-
-      control.className = "product-qty-control is-active";
-      control.innerHTML = `
-        <button class="product-qty-btn" data-product-dec="${productId}" title="Decrease quantity" aria-label="Decrease quantity">
-          <i class="ph ph-minus"></i>
-        </button>
-        <span class="product-qty-value" aria-live="polite">${quantity}</span>
-        <button class="product-qty-btn" data-product-inc="${productId}" title="Increase quantity" aria-label="Increase quantity">
-          <i class="ph ph-plus"></i>
-        </button>
-      `;
     });
   }
 

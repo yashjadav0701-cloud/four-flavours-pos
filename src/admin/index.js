@@ -1173,58 +1173,70 @@ async function renderAdminWorkspace(mount) {
     const url = getCustomerTableUrl(table.id);
     const modal = openAppModal({
       title: `Table ${escapeHtml(table.table_no)} QR`,
-      subtitle: "This QR always opens the live Four Flavours menu at four-flavours.vercel.app.",
-      body: `<div class="qr-preview-panel">
-        <div class="qr-preview" id="table-qr" style="position:relative;">
-          <!-- QR Canvas generated here -->
-          <img src="${versionedAsset("assets/images/website_icon.png")}" style="position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); width:48px; height:48px; border-radius:10px; border:4px solid #fff; z-index:10; background:#fff;" alt="Logo">
+      subtitle: "This QR always opens the live Four Flavours menu for this specific table.",
+      body: `
+        <div class="qr-preview-panel">
+          <div class="qr-preview" id="table-qr"></div>
+          <div class="qr-table-title">Table ${escapeHtml(table.table_no)}</div>
+          <div class="qr-url">${escapeHtml(url)}</div>
+          <div class="qr-safety-note">
+            <i class="ph ph-shield-check"></i>
+            <span>Production QR · Opens only the Four Flavours customer menu for this table.</span>
+          </div>
         </div>
-        <div class="qr-table-title">Table ${escapeHtml(table.table_no)}</div>
-        <div class="qr-url">${escapeHtml(url)}</div>
-        <div class="qr-safety-note"><i class="ph ph-shield-check"></i><span>Production QR · Opens only the Four Flavours customer menu for this table.</span></div>
-      </div>`,
+      `,
       actions: [
         { label: "Close", icon: "ph-x", className: "btn-quiet", onClick: ({ close }) => close() },
-        { label: "Download QR", icon: "ph-download-simple", className: "btn-primary", onClick: ({ button }) => { 
+        { 
+          label: "Download", 
+          icon: "ph-download-simple", 
+          className: "btn-quiet", 
+          onClick: () => { 
+            const canvas = modal.root.querySelector("#table-qr canvas");
+            const img = modal.root.querySelector("#table-qr img");
+            const source = canvas ? canvas.toDataURL("image/png") : (img ? img.src : null);
+            
+            if(source) {
+              const link = document.createElement("a");
+              link.download = `Table-${table.table_no}-QR.png`;
+              link.href = source;
+              link.click();
+              showToast("Downloaded", `Table ${table.table_no} QR code saved.`);
+            } else {
+              showToast("Error", "QR Code not ready yet.", "error");
+            }
+          } 
+        },
+        { 
+          label: "Print QR", 
+          icon: "ph-printer", 
+          className: "btn-primary", 
+          onClick: ({ button }) => { 
             button.disabled = true; 
-            const qrCanvas = modal.root.querySelector("#table-qr canvas");
-            if (!qrCanvas) { button.disabled = false; return; }
-            
-            // Build a high-res merged canvas for download
-            const merged = document.createElement("canvas");
-            const size = 600; 
-            merged.width = size; 
-            merged.height = size;
-            const ctx = merged.getContext("2d");
-            
-            // Draw white background & QR
-            ctx.fillStyle = "#ffffff"; 
-            ctx.fillRect(0, 0, size, size);
-            ctx.drawImage(qrCanvas, 24, 24, size - 48, size - 48);
-            
-            // Draw Logo in center
-            const logo = new Image();
-            logo.crossOrigin = "Anonymous";
-            logo.src = versionedAsset("assets/images/website_icon.png");
-            logo.onload = () => {
-              const ls = size * 0.22; // Logo takes up 22% of QR
-              const center = (size - ls) / 2;
-              ctx.fillStyle = "#ffffff"; 
-              ctx.fillRect(center - 12, center - 12, ls + 24, ls + 24); // White protective border
-              ctx.drawImage(logo, center, center, ls, ls);
-              
-              // Trigger PNG Download
-              const a = document.createElement("a");
-              a.download = `FourFlavours_Table_${table.table_no}_QR.png`;
-              a.href = merged.toDataURL("image/png");
-              a.click();
-              button.disabled = false;
-            };
-        }}
+            const host = document.querySelector("#qr-print-host"); 
+            const qr = modal.root.querySelector("#table-qr"); 
+            host.innerHTML = `<section class="qr-print-sheet"><img src="${versionedAsset("assets/images/website_icon.png")}" alt=""><h1>Four Flavours</h1><h2>Table ${escapeHtml(table.table_no)}</h2><div class="qr-print-code">${qr.innerHTML}</div><p>Scan to view the menu & order</p></section>`; 
+            document.body.classList.add("print-qr"); 
+            window.print(); 
+            setTimeout(() => { document.body.classList.remove("print-qr"); host.innerHTML = ""; button.disabled = false; }, 800); 
+          } 
+        }
       ]
     });
-    // Use Level.H (High Error Correction) so the center logo doesn't break the scan!
-    if (globalThis.QRCode) new QRCode(modal.root.querySelector("#table-qr"), { text: url, width: 220, height: 220, correctLevel: QRCode.CorrectLevel.H });
+
+    // We force clear the container to guarantee no injected logos push the QR code out of the box
+    setTimeout(() => {
+      if (globalThis.QRCode) {
+        const container = modal.root.querySelector("#table-qr");
+        container.innerHTML = ""; 
+        new QRCode(container, { 
+          text: url, 
+          width: 256, 
+          height: 256, 
+          correctLevel: QRCode.CorrectLevel.M 
+        });
+      }
+    }, 50);
   }
 
   function openProductEditor(product = null) {
