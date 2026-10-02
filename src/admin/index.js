@@ -530,12 +530,12 @@ async function renderAdminWorkspace(mount) {
       </header>
 
       <nav class="admin-section-nav" id="admin-section-nav" aria-label="Management sections">
-        <button data-section="overview" class="active"><i class="ph-fill ph-squares-four"></i><span>Overview</span></button>
-        <button data-section="orders"><i class="ph-bold ph-receipt"></i><span>Orders</span></button>
-        <button data-section="cuisines"><i class="ph-bold ph-image"></i><span>Cuisines</span></button>
-        <button data-section="menu"><i class="ph-bold ph-fork-knife"></i><span>Menu</span></button>
-        <button data-section="tables"><i class="ph-bold ph-armchair"></i><span>Tables</span></button>
-        <button data-section="settings"><i class="ph-bold ph-gear"></i><span>Settings</span></button>
+        <button data-section="overview" class="active"><i class="ph ph-fill ph-squares-four"></i><span>Overview</span></button>
+        <button data-section="orders"><i class="ph ph-bold ph-receipt"></i><span>Orders</span></button>
+        <button data-section="cuisines"><i class="ph ph-bold ph-image"></i><span>Cuisines</span></button>
+        <button data-section="menu"><i class="ph ph-bold ph-fork-knife"></i><span>Menu</span></button>
+        <button data-section="tables"><i class="ph ph-bold ph-armchair"></i><span>Tables</span></button>
+        <button data-section="settings"><i class="ph ph-bold ph-gear"></i><span>Settings</span></button>
       </nav>
       <main class="admin-content"><section id="admin-area"></section></main>
     </section>`;
@@ -550,7 +550,7 @@ async function renderAdminWorkspace(mount) {
       el.classList.toggle("active", isActive);
       const icon = el.querySelector("i");
       if (icon) {
-        if (isActive) icon.className = icon.className.replace("ph-bold", "ph-fill").replace(" ph ", " ph-fill ");
+        if (isActive) icon.className = icon.className.replace("ph-bold", "ph-fill");
         else icon.className = icon.className.replace("ph-fill", "ph-bold");
       }
     });

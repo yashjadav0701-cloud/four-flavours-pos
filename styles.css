@@ -1719,67 +1719,74 @@ html, body {
   color: var(--muted) !important;
 }
 
-/* --- Admin Navigation Styling (Native Mobile Bottom Tab Bar) --- */
-.admin-section-nav {
+/* =========================================
+   PREMIUM ADMIN NAVIGATION BAR (SNUG DOCK)
+   ========================================= */
+nav#admin-section-nav.admin-section-nav {
   position: fixed !important;
-  bottom: 0 !important;
-  left: 0 !important;
-  right: 0 !important;
-  background: var(--paper) !important;
-  border-top: 1px solid var(--line) !important;
-  padding: 4px var(--app-px) calc(4px + env(safe-area-inset-bottom)) !important; /* Drastically slimmer height */
+  bottom: 8px !important; /* Tighter to the bottom edge */
+  left: 50% !important;
+  transform: translateX(-50%) !important;
+  width: min(calc(100% - 16px), 520px) !important; /* Reduces side gaps to just 8px on mobile */
+  height: 54px !important;
+  background: var(--sage-100) !important; 
+  border: 1px solid var(--sage-200) !important;
+  border-radius: 20px !important; 
+  padding: 0 10px !important;
   display: flex !important;
   align-items: center !important;
-  justify-content: space-around !important; 
-  gap: 0 !important;
-  z-index: 50 !important;
-  box-shadow: 0 -8px 24px rgba(25, 50, 28, 0.08) !important; 
+  justify-content: space-between !important; 
+  gap: 2px !important;
+  z-index: 9999 !important;
+  box-shadow: 0 10px 30px rgba(18, 34, 22, 0.15) !important; 
 }
 
-.admin-section-nav button {
+nav#admin-section-nav.admin-section-nav button {
   display: flex !important;
-  flex-direction: column !important;
   align-items: center !important;
   justify-content: center !important;
   background: transparent !important;
-  color: var(--forest-900) !important; 
-  opacity: 0.5 !important; 
   border: none !important;
-  border-radius: 0 !important;
-  padding: 4px 16px !important; /* Reduces internal button height */
-  outline: none !important; /* Removes the ugly white focus box */
-  -webkit-tap-highlight-color: transparent !important; /* Removes blue tap flash on mobile */
+  border-radius: 12px !important;
+  height: 42px !important; 
+  flex: 1 !important; 
+  padding: 0 !important; 
+  outline: none !important; 
+  -webkit-tap-highlight-color: transparent !important; 
   transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) !important;
 }
 
-.admin-section-nav button i {
+/* Base Inactive State */
+nav#admin-section-nav.admin-section-nav button i {
   margin: 0 !important;
-  font-size: 26px !important; /* Massive, touch-friendly icons */
-  transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1), color 0.3s ease !important;
+  font-size: 26px !important; 
+  color: var(--forest-600) !important; 
+  transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) !important;
+  -webkit-text-stroke: 0 !important; 
+  font-weight: normal !important; 
 }
 
-/* Hide text labels to make it a pure Icon Tab Bar */
-.admin-section-nav button span,
-.admin-section-nav button strong {
+/* Hide text labels */
+nav#admin-section-nav.admin-section-nav button span,
+nav#admin-section-nav.admin-section-nav button strong {
   display: none !important;
 }
 
-.admin-section-nav button:hover {
-  opacity: 0.8 !important;
-  background: transparent !important;
+nav#admin-section-nav.admin-section-nav button:hover {
+  background: var(--sage-200) !important;
 }
 
-/* The Active Focus (Green Highlight & Floating Pop) */
-.admin-section-nav button.active {
-  background: transparent !important; 
+/* The Active Focus */
+nav#admin-section-nav.admin-section-nav button.active {
+  background: var(--sage-200) !important; 
   opacity: 1 !important;
-  color: var(--forest-900) !important; 
-  box-shadow: none !important;
 }
 
-.admin-section-nav button.active i {
-  color: var(--forest-900) !important; /* Icon shifts to theme color on focus */
-  transform: translateY(-3px) scale(1.15) !important; /* Elegant floating pop effect */
+nav#admin-section-nav.admin-section-nav button.active i {
+  color: var(--forest-950) !important; 
+  font-size: 30px !important; 
+  transform: translateY(-2px) !important; 
+  filter: drop-shadow(0 4px 6px rgba(18, 34, 22, 0.2)) !important; 
 }
 
 /* --- Dashboard Open Badge Centering --- */
@@ -1818,7 +1825,7 @@ html, body {
 /* --- Massive Cuisines & 3D Hover Animation --- */
 .cuisine-hero-grid {
   display: grid !important;
-  grid-template-columns: repeat(2, minmax(0, 1fr)) !important; /* Restores 2-column mobile layout */
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
   gap: 10px !important;
   width: 100% !important;
   max-width: 1200px !important;
@@ -1827,7 +1834,7 @@ html, body {
 
 .cuisine-hero-card {
   border-radius: 16px !important;
-  aspect-ratio: 3/4 !important; /* Standard mobile ratio */
+  aspect-ratio: 3/4 !important;
   overflow: hidden;
   position: relative;
   transition: transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.4s ease !important;
@@ -1853,7 +1860,7 @@ html, body {
 }
 
 .cuisine-hero-overlay h3 {
-  font-size: 1.15rem !important; /* Restores clean mobile text size */
+  font-size: 1.15rem !important;
   transition: transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) !important;
 }
 
@@ -1861,10 +1868,9 @@ html, body {
   transform: translateY(-4px) scale(1.02) !important;
 }
 
-/* Keep the massive cinematic scaling strictly for Desktop/Tablet */
 @media (min-width: 721px) {
   .cuisine-hero-grid {
-    grid-template-columns: repeat(4, minmax(0, 1fr)) !important; /* Strictly forces a single line of 4 cards */
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
     gap: 16px !important;
   }
   .cuisine-hero-card {
@@ -1879,7 +1885,7 @@ html, body {
     transform: scale(1.15) !important; 
   }
   .cuisine-hero-overlay h3 {
-    font-size: clamp(1.1rem, 1.8vw, 1.5rem) !important; /* Fluidly scales down on tablets to safely fit long words like Continental */
+    font-size: clamp(1.1rem, 1.8vw, 1.5rem) !important;
   }
   .cuisine-hero-card:hover .cuisine-hero-overlay h3 {
     transform: translateY(-8px) scale(1.05) !important;
@@ -1889,9 +1895,9 @@ html, body {
 /* --- Ultimate Responsive Order History Data Table --- */
 .admin-order-data-row {
   display: grid !important;
-  gap: 12px 24px !important; /* Tight vertical gap, wide horizontal gap */
+  gap: 12px 24px !important;
   align-items: center !important;
-  padding: 12px 20px !important; /* Reduced padding for a compact data feel */
+  padding: 12px 20px !important;
   background: var(--paper) !important;
   border: 1px solid var(--line) !important;
   border-radius: 12px !important;
@@ -1899,45 +1905,24 @@ html, body {
   width: 100% !important;
 }
 
-/* Base Text Styling */
 .order-cell-id { font-size: 16px !important; font-weight: 900 !important; color: var(--forest-950) !important; white-space: nowrap !important; }
 .order-cell-date { font-size: 14.5px !important; color: var(--muted) !important; white-space: nowrap !important; font-weight: 600 !important; }
 .order-cell-type { font-size: 14.5px !important; color: var(--forest-700) !important; white-space: nowrap !important; font-weight: 600 !important; }
 .order-cell-price { font-size: 16px !important; font-weight: 900 !important; color: var(--forest-950) !important; }
 .order-cell-actions { display: flex !important; gap: 10px !important; }
 
-/* 1. Default (Tablet / Mobile) - 2 Row Grid */
-.admin-order-data-row {
-  grid-template-columns: auto auto 1fr auto !important; /* Maps to: ID | Date | Type | Price */
-}
-.order-cell-price {
-  text-align: right !important;
-}
-.order-cell-actions {
-  grid-column: 1 / 3 !important; /* Button row spans across the bottom left under ID/Date */
-  justify-content: flex-start !important;
-}
+.admin-order-data-row { grid-template-columns: auto auto 1fr auto !important; }
+.order-cell-price { text-align: right !important; }
+.order-cell-actions { grid-column: 1 / 3 !important; justify-content: flex-start !important; }
 
-/* 2. PC / Large Displays - 1 Flat Row */
 @media (min-width: 900px) {
-  .admin-order-data-row {
-    grid-template-columns: auto auto 1fr auto auto !important; /* Maps exactly to the 5 column sketch */
-  }
-  .order-cell-actions {
-    grid-column: auto !important;
-    justify-content: flex-end !important;
-  }
+  .admin-order-data-row { grid-template-columns: auto auto 1fr auto auto !important; }
+  .order-cell-actions { grid-column: auto !important; justify-content: flex-end !important; }
 }
 
-/* 3. Tiny Mobile Screens - Safe Stack */
 @media (max-width: 520px) {
-  .admin-order-data-row {
-    grid-template-columns: 1fr auto !important;
-    gap: 8px !important;
-  }
-  .order-cell-date, .order-cell-type, .order-cell-actions {
-    grid-column: 1 / -1 !important;
-  }
+  .admin-order-data-row { grid-template-columns: 1fr auto !important; gap: 8px !important; }
+  .order-cell-date, .order-cell-type, .order-cell-actions { grid-column: 1 / -1 !important; }
 }
 
 /* --- Premium Product Hover Zoom --- */
@@ -2004,7 +1989,6 @@ html, body {
   transform: scale(1);
 }
 
-/* The Minus Button unrolls and spins in from the left */
 .dec-btn {
   position: absolute;
   left: 0;
@@ -2018,7 +2002,6 @@ html, body {
   color: #fff;
 }
 
-/* The Plus Button stays anchored right and changes color */
 .inc-btn {
   position: absolute;
   right: 0;
@@ -2033,7 +2016,6 @@ html, body {
   background: var(--sage-200);
 }
 
-/* Enhances the click-pulse effect to match the new button */
 .qty-pulse {
   animation: premium-pulse 250ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
@@ -2043,35 +2025,104 @@ html, body {
   100% { transform: scale(1); }
 }
 
-/* --- Maximize Mobile Screen Space --- */
 @media (max-width: 720px) {
-  /* Push main content to the very edges */
   .pos-content, .customer-stage, .admin-content {
     padding-left: 8px !important;
     padding-right: 8px !important;
     width: 100% !important;
   }
-  
-  /* Bring the cuisine cards closer together on mobile */
-  .cuisine-hero-grid {
-    gap: 8px !important;
-  }
-  
-  /* Align all headers with the new tight margins */
+  .cuisine-hero-grid { gap: 8px !important; }
   .pos-topbar, .admin-topbar, .customer-topbar {
     padding-left: 8px !important;
     padding-right: 8px !important;
   }
 }
 
-/* --- Light Theme Table Badge Overrides --- */
 .topbar-left > div[style*="flex-direction: column"] {
   background: var(--sage-100) !important;
   border: 1px solid var(--sage-200) !important;
 }
-.topbar-left > div[style*="flex-direction: column"] span {
-  color: var(--forest-950) !important;
+.topbar-left > div[style*="flex-direction: column"] span { color: var(--forest-950) !important; }
+.topbar-left > div[style*="flex-direction: column"] i { color: var(--forest-800) !important; }
+
+/* =========================================
+   PREMIUM PRODUCT CARD OVERRIDES
+   ========================================= */
+.pos-product-card {
+  border-radius: 10px !important;
+  overflow: hidden !important;
+  background: #ffffff !important;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.06) !important;
+  display: flex !important;
+  flex-direction: column !important;
 }
-.topbar-left > div[style*="flex-direction: column"] i {
-  color: var(--forest-800) !important;
+.pos-product-media {
+  padding: 0 !important;
+  margin: 0 !important;
+  width: 100% !important;
+  aspect-ratio: 5 / 4 !important;
+  overflow: hidden !important;
+  position: relative !important;
+  background: var(--cream-100) !important;
+  border-radius: 0 !important;
+}
+.pos-product-media img {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+  object-position: center !important;
+  display: block !important;
+}
+.veg-mark {
+  position: absolute !important;
+  top: 8px !important;
+  right: 8px !important;
+  z-index: 2 !important;
+  background: rgba(255,255,255,0.95) !important;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1) !important;
+  border-radius: 4px !important;
+}
+
+/* TIGHTER, STYLED CARD DETAILS */
+.pos-product-copy {
+  padding: 12px 14px 14px 14px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 3px !important;
+  flex: 1 !important;
+}
+.pos-product-copy > strong {
+  color: var(--forest-700) !important;
+  font-size: 15.5px !important;
+  font-weight: 800 !important;
+  line-height: 1.2 !important;
+  margin-bottom: 0 !important;
+  min-height: auto !important; /* Strips the old 42px minimum height */
+}
+.pos-product-copy > span {
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  color: var(--forest-500) !important;
+  margin-top: 0 !important; /* Removes leftover top margin */
+  margin-bottom: 3px !important;
+}
+.pos-product-desc {
+  font-size: 12px !important;
+  line-height: 1.35 !important;
+  color: var(--muted) !important;
+  margin: 0 0 8px 0 !important;
+  display: -webkit-box !important;
+  -webkit-line-clamp: 2 !important;
+  -webkit-box-orient: vertical !important;
+  overflow: hidden !important;
+}
+.pos-product-bottom {
+  margin-top: auto !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+}
+.pos-product-bottom b {
+  font-size: 16px !important;
+  color: var(--forest-950) !important;
 }

@@ -1,0 +1,17 @@
+{
+  "name": "Four Flavours",
+  "short_name": "Four Flavours",
+  "description": "Premium dining and live table ordering.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#fcfbf7",
+  "theme_color": "#122216",
+  "icons": [
+    {
+      "src": "/assets/images/website_icon.png",
+      "sizes": "192x192 512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
