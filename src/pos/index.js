@@ -23,10 +23,36 @@ export async function render({ mount }) {
   const products = productsResult.data ?? [];
   const tables = tablesResult.data ?? [];
   const cuisines = cuisinesResult.data ?? [];
+  
+  // --- SHAPE-SHIFTING VIEWPORT DETECTION ---
+  const urlParams = new URLSearchParams(window.location.search);
+  const qrTableId = urlParams.get("table") || urlParams.get("t");
+  const isCustomerMode = Boolean(qrTableId);
+  
+  let customerSessionToken = null;
+  const currentTableObj = isCustomerMode ? tables.find(t => t.id === qrTableId) : null;
+
+  if (isCustomerMode) {
+    if (!currentTableObj) {
+      mount.innerHTML = `<main class="customer-page"><section class="customer-message"><div class="message-mark"><i class="ph ph-qr-code"></i></div><span class="eyebrow">Four Flavours</span><h1>Table unavailable</h1><p>This QR code is invalid or no longer active.</p></section></main>`;
+      return () => {};
+    }
+    // Bootstrap secure customer session
+    const sessionKey = `fourflavours.session.${currentTableObj.id}`;
+    const { data: sessionBootstrap, error: sessionError } = await supabase.rpc("ensure_customer_session", { p_table_id: currentTableObj.id });
+    if (sessionError) throw sessionError;
+    customerSessionToken = (sessionBootstrap?.[0] ?? sessionBootstrap)?.session_token;
+    if (customerSessionToken) localStorage.setItem(sessionKey, customerSessionToken);
+  }
+
   const state = createPOSState({ settings });
   
-  window.__FOUR_FLAVOURS_POS_STATE__ = state; // Exposes state for Admin Routing
-  
+  // Lock the state machine immediately for customers
+  if (isCustomerMode) {
+    state.setOrderType("dine_in");
+    state.setTable(currentTableObj);
+  }
+
   let activeCuisine = null;
   let activeSubCategory = "All";
   let searchTerm = "";
@@ -53,43 +79,45 @@ export async function render({ mount }) {
   window.addEventListener("popstate", handlePopState);
 
   mount.innerHTML = `
-    <section class="pos-page">
+    <section class="pos-page ${isCustomerMode ? 'customer-viewport' : 'staff-viewport'}">
       <header class="app-topbar pos-topbar">
-        <div class="topbar-side topbar-left" style="gap: 12px;">
-          <button class="icon-btn icon-btn-dark" id="pos-menu" title="Open menu" aria-label="Open menu"><i class="ph ph-list"></i></button>
-          <img src="${versionedAsset("assets/images/website_logo.png")}" alt="Four Flavours" style="height: 28px; width: auto;" />
+        <div class="topbar-side topbar-left" style="gap: 14px; align-items: center; display: flex;">
+          ${isCustomerMode ? `
+            <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; width: auto; height: 42px; padding: 4px 12px; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); border-radius: 6px; flex-shrink: 0;">
+              <i class="ph-bold ph-armchair" style="color: var(--gold-400); font-size: 18px; line-height: 1; margin-bottom: 4px;"></i>
+              <span style="color: #fff; font-size: 10px; font-weight: 800; letter-spacing: 0.06em; line-height: 1; text-transform: uppercase; white-space: nowrap;">Table ${escapeHtml(currentTableObj?.table_no ?? "—")}</span>
+            </div>
+          ` : `
+            <button class="icon-btn icon-btn-dark" id="pos-menu" title="Open menu" aria-label="Open menu"><i class="ph ph-list"></i></button>
+          `}
+          <img src="${versionedAsset("assets/images/website_logo.png")}" alt="Four Flavours" style="height: 46px; width: auto; max-height: none; object-fit: contain; flex-shrink: 0;" />
         </div>
-        <div class="brand-center pos-brand-center main-logo-only">
-          <!-- Center logo moved to top-left -->
-        </div>
+        <div class="brand-center pos-brand-center main-logo-only"></div>
         <div class="topbar-side topbar-right">
           <button class="icon-btn icon-btn-dark" id="pos-search-toggle" title="Search"><i class="ph ph-magnifying-glass"></i></button>
-          <button class="icon-btn icon-btn-dark icon-badge-btn" id="pos-orders" title="Table orders" aria-label="Table orders"><i class="ph ph-bell"></i><span class="icon-badge hidden" id="pos-order-badge">0</span></button>
+          ${isCustomerMode ? `
+            <button class="icon-btn icon-btn-dark" id="customer-live-tab" title="View Live Tab"><i class="ph-bold ph-receipt"></i></button>
+          ` : `
+            <button class="icon-btn icon-btn-dark icon-badge-btn" id="pos-orders" title="Table orders" aria-label="Table orders"><i class="ph ph-bell"></i><span class="icon-badge hidden" id="pos-order-badge">0</span></button>
+          `}
         </div>
       </header>
       
-      <div class="pos-search-backdrop" id="pos-search-backdrop">
-        <div class="pos-search-panel">
-          <div class="search-bar-row">
-            <div class="search-input-wrap">
-              <i class="ph-bold ph-magnifying-glass"></i>
-              <input id="pos-search" class="search-input" type="text" placeholder="Search dishes..." autocomplete="off">
-              <button id="pos-search-clear" class="icon-btn is-hidden"><i class="ph-bold ph-x"></i></button>
-            </div>
-            <button id="pos-search-cancel" class="btn-quiet">Cancel</button>
-          </div>
-          <div class="search-suggestions" id="search-suggestions"></div>
-        </div>
+      <div class="pos-search-overlay" id="pos-search-overlay">
+        <i class="ph ph-magnifying-glass"></i>
+        <input id="pos-search" class="search-input" type="search" placeholder="Search dishes..." autocomplete="off">
       </div>
 
       <main class="pos-content">
-        <section class="pos-toolbar-row">
-          <button class="pos-toolbar-pill active" data-order-type="dine_in"><i class="ph-bold ph-armchair"></i><span>Dine-in</span></button>
-          <button class="pos-toolbar-pill" data-order-type="takeaway"><i class="ph-bold ph-shopping-bag"></i><span>Takeaway</span></button>
-          <div class="pos-toolbar-pill" id="pos-table-wrap" style="cursor: pointer;" title="Select Table">
-            <span class="selected-text" id="pos-table-display"><i class="ph-bold ph-armchair"></i><span>Table</span><i class="ph ph-caret-down"></i></span>
-          </div>
-        </section>
+        ${isCustomerMode ? '' : `
+          <section class="pos-toolbar-row">
+            <button class="pos-toolbar-pill active" data-order-type="dine_in"><i class="ph-bold ph-armchair"></i><span>Dine-in</span></button>
+            <button class="pos-toolbar-pill" data-order-type="takeaway"><i class="ph-bold ph-shopping-bag"></i><span>Takeaway</span></button>
+            <div class="pos-toolbar-pill" id="pos-table-wrap">
+              <span class="selected-text" id="pos-table-display"><i class="ph-bold ph-armchair"></i><span>Table</span><i class="ph ph-caret-down"></i></span>
+            </div>
+          </section>
+        `}
         <div id="pos-dynamic-area"></div>
       </main>
 
@@ -104,167 +132,131 @@ export async function render({ mount }) {
     </section>`;
 
   drawerCleanup = mountNavigation({ active: "pos" });
-  mount.querySelector("#pos-menu").addEventListener("click", () => window.__FOUR_FLAVOURS_NAV__?.open());
+  if (!isCustomerMode) {
+    mount.querySelector("#pos-menu").addEventListener("click", () => window.__FOUR_FLAVOURS_NAV__?.open());
+  }
   
-  const searchBackdrop = mount.querySelector("#pos-search-backdrop");
   const searchInput = mount.querySelector("#pos-search");
-  const searchClear = mount.querySelector("#pos-search-clear");
-  const searchSuggestions = mount.querySelector("#search-suggestions");
+  const searchOverlay = mount.querySelector("#pos-search-overlay");
   
-  // Load recents from device storage
-  let recentSearches = JSON.parse(localStorage.getItem("fourflavours_recent_searches") || "[]");
-
-  mount.querySelector("#pos-search-toggle").addEventListener("click", () => {
-    searchBackdrop.classList.add("active");
-    searchInput.focus();
-    renderSearchSuggestions();
+  mount.querySelector("#pos-search-toggle").addEventListener("click", (e) => {
+    e.stopPropagation();
+    searchOverlay.classList.toggle("active");
+    if (searchOverlay.classList.contains("active")) searchInput.focus();
   });
 
-  mount.querySelector("#pos-search-cancel").addEventListener("click", () => {
-    searchBackdrop.classList.remove("active");
-    searchInput.value = "";
-    searchClear.classList.add("is-hidden");
-    searchTerm = "";
-    renderProducts();
-  });
-
-  searchClear.addEventListener("click", () => {
-    searchInput.value = "";
-    searchInput.focus();
-    searchClear.classList.add("is-hidden");
-    renderSearchSuggestions();
-  });
-
-  searchInput.addEventListener("input", (e) => {
-    const val = e.target.value.trim();
-    searchClear.classList.toggle("is-hidden", val === "");
-    renderSearchSuggestions(val);
-  });
-
-  searchInput.addEventListener("keydown", (e) => {
-    if (e.key === "Enter" && searchInput.value.trim()) {
-      executeSearch(searchInput.value.trim());
+  const handleOutsideClick = (e) => {
+    if (searchOverlay && !searchOverlay.contains(e.target) && !e.target.closest("#pos-search-toggle")) {
+      searchOverlay.classList.remove("active");
     }
-  });
+  };
+  document.addEventListener("click", handleOutsideClick);
 
-  function executeSearch(query) {
-    if (!query) return;
-    // Save to recents (max 5)
-    recentSearches = [query, ...recentSearches.filter(s => s.toLowerCase() !== query.toLowerCase())].slice(0, 5);
-    localStorage.setItem("fourflavours_recent_searches", JSON.stringify(recentSearches));
-    
-    searchTerm = query.toLowerCase();
-    searchBackdrop.classList.remove("active");
-    renderProducts();
-  }
+  searchInput.addEventListener("input", event => { searchTerm = event.target.value.trim().toLowerCase(); renderProducts(); });
+  
+  if (!isCustomerMode) {
+    const tableDisplay = mount.querySelector("#pos-table-display span");
+    const tableWrapBtn = mount.querySelector("#pos-table-wrap");
+    let autoOpenReview = false;
 
-  function renderSearchSuggestions(query = "") {
-    let html = "";
-    
-    if (query) {
-      // Live Filtering Results
-      const hits = products.filter(p => p.name.toLowerCase().includes(query.toLowerCase())).slice(0, 6);
-      if (hits.length) {
-        html += `<div class="search-group-title">Matches</div><div class="search-list">`;
-        html += hits.map(p => `<button class="search-list-item" data-search-trigger="${escapeHtml(p.name)}"><i class="ph ph-magnifying-glass"></i><span>${escapeHtml(p.name)}</span></button>`).join("");
-        html += `</div>`;
-      } else {
-        html = `<div class="empty-state compact"><i class="ph ph-magnifying-glass"></i><strong>No exact matches</strong><span>Press enter to search anyway.</span></div>`;
-      }
-    } else {
-      // 1. Show Recents
-      if (recentSearches.length > 0) {
-        html += `<div class="search-group-title">Recent Searches</div><div class="search-tags">`;
-        html += recentSearches.map(s => `<button class="search-tag" data-search-trigger="${escapeHtml(s)}"><i class="ph ph-clock-counter-clockwise"></i>${escapeHtml(s)}</button>`).join("");
-        html += `</div>`;
-      }
+    tableWrapBtn.addEventListener("click", async (e) => {
+      if (state.getState().orderType === "takeaway") return;
+      
+      autoOpenReview = e.isTrusted === false || window._autoReviewPending;
+      window._autoReviewPending = false;
 
-      // 2. Show Dynamic Recommendations (Randomized per load for variety)
-      const shuffled = [...products].sort(() => 0.5 - Math.random()).slice(0, 4);
-      if (shuffled.length > 0) {
-        html += `<div class="search-group-title">Perfect Meals Recommended For You</div><div class="search-list">`;
-        html += shuffled.map(p => `<button class="search-list-item" data-search-trigger="${escapeHtml(p.name)}"><i class="ph ph-star"></i><span>${escapeHtml(p.name)}</span><small>${money(p.price, settings.currency_symbol)}</small></button>`).join("");
-        html += `</div>`;
-      }
-    }
+      // FETCH LIVE STATUS: Only show tables that are currently free!
+      const { data: activeSessions } = await supabase.from("dining_sessions").select("table_id").in("status", ["open", "bill_requested", "bill_ready"]);
+      const occupiedIds = new Set((activeSessions || []).map(s => s.table_id));
+      const freeTables = tables.filter(t => !occupiedIds.has(t.id));
+      
+      const modal = openAppModal({
+        title: "Select Table",
+        subtitle: "Assign a table for this dine-in session. Occupied tables are hidden.",
+        body: `<div class="table-selection-list" style="max-height: 50vh; overflow-y: auto; margin: -10px -24px;">
+          ${freeTables.length ? freeTables.map(t => `
+            <button class="btn btn-quiet table-select-btn" data-table-id="${t.id}" style="width: 100%; border-radius: 0; justify-content: flex-start; padding: 18px 24px; font-size: 16px; border-bottom: 1px solid var(--line);">
+              <i class="ph-bold ph-armchair" style="color: var(--forest-600); margin-right: 14px; font-size: 20px;"></i>
+              <strong style="color: var(--forest-950);">Table ${escapeHtml(t.table_no)}</strong>
+              <span style="margin-left: auto; font-size: 13px; font-weight: 700; color: var(--muted);">${t.capacity} seats</span>
+            </button>
+          `).join("") : `<div class="empty-state"><i class="ph-bold ph-armchair"></i><strong>No free tables</strong><span>All tables are currently occupied.</span></div>`}
+        </div>`,
+        actions: [{ label: "Cancel", icon: "ph-x", className: "btn-quiet", onClick: (ctx) => { autoOpenReview = false; ctx.close(); } }]
+      });
 
-    searchSuggestions.innerHTML = html;
-    searchSuggestions.querySelectorAll("[data-search-trigger]").forEach(btn => {
-      btn.addEventListener("click", () => {
-        searchInput.value = btn.dataset.searchTrigger;
-        executeSearch(btn.dataset.searchTrigger);
+      modal.root.querySelectorAll(".table-select-btn").forEach(btn => {
+        btn.addEventListener("click", () => {
+          const table = tables.find(t => t.id === btn.dataset.tableId) ?? null;
+          state.setTable(table);
+          tableDisplay.textContent = table ? `Table ${table.table_no}` : "Table";
+          modal.close();
+          
+          if (autoOpenReview && state.getState().items.length > 0) {
+            autoOpenReview = false;
+            openReview();
+          }
+        });
       });
     });
+    
+    mount.querySelectorAll("[data-order-type]").forEach(button => button.addEventListener("click", () => { 
+      state.setOrderType(button.dataset.orderType); 
+      mount.querySelectorAll("[data-order-type]").forEach(el => el.classList.toggle("active", el === button)); 
+      tableWrapBtn.classList.toggle("is-disabled", button.dataset.orderType === "takeaway"); 
+      if (button.dataset.orderType === "takeaway") {
+        state.setTable(null);
+        tableDisplay.textContent = "Table";
+      }
+    }));
+    
+    mount.querySelector("#pos-orders").addEventListener("click", openOrdersDrawer);
+  } else {
+    mount.querySelector("#customer-live-tab").addEventListener("click", openLiveTabDashboard);
   }
-  
-  const tableDisplay = mount.querySelector("#pos-table-display span");
-  const tableWrapBtn = mount.querySelector("#pos-table-wrap");
-  let autoOpenReview = false;
-
-  tableWrapBtn.addEventListener("click", (e) => {
-    if (state.getState().orderType === "takeaway") return;
-    
-    // Detect if this click came programmatically from the "Next" button smart redirect
-    autoOpenReview = e.isTrusted === false || window._autoReviewPending;
-    window._autoReviewPending = false;
-    
-    const modal = openAppModal({
-      title: "Select Table",
-      subtitle: "Assign a table for this dine-in session.",
-      body: `<div class="table-selection-list" style="max-height: 50vh; overflow-y: auto; margin: -10px -24px;">
-        ${tables.length ? tables.map(t => `
-          <button class="btn btn-quiet table-select-btn" data-table-id="${t.id}" style="width: 100%; border-radius: 0; justify-content: flex-start; padding: 18px 24px; font-size: 16px; border-bottom: 1px solid var(--line);">
-            <i class="ph-bold ph-armchair" style="color: var(--forest-600); margin-right: 14px; font-size: 20px;"></i>
-            <strong style="color: var(--forest-950);">Table ${escapeHtml(t.table_no)}</strong>
-            <span style="margin-left: auto; font-size: 13px; font-weight: 700; color: var(--muted);">${t.capacity} seats</span>
-          </button>
-        `).join("") : `<div class="empty-state"><i class="ph-bold ph-armchair"></i><strong>No active tables</strong></div>`}
-      </div>`,
-      actions: [
-        { label: "Cancel", icon: "ph-x", className: "btn-quiet", onClick: (ctx) => { autoOpenReview = false; ctx.close(); } }
-      ]
-    });
-
-    modal.root.querySelectorAll(".table-select-btn").forEach(btn => {
-      btn.addEventListener("click", () => {
-        const table = tables.find(t => t.id === btn.dataset.tableId) ?? null;
-        state.setTable(table);
-        tableDisplay.textContent = table ? `Table ${table.table_no}` : "Table";
-        modal.close();
-        
-        // Smart Redirect: If triggered by 'Next' and cart has items, seamlessly transition to Review
-        if (autoOpenReview && state.getState().items.length > 0) {
-          autoOpenReview = false;
-          openReview();
-        }
-      });
-    });
-  });
-  
-  mount.querySelectorAll("[data-order-type]").forEach(button => button.addEventListener("click", () => { 
-    state.setOrderType(button.dataset.orderType); 
-    mount.querySelectorAll("[data-order-type]").forEach(el => el.classList.toggle("active", el === button)); 
-    tableWrapBtn.classList.toggle("is-disabled", button.dataset.orderType === "takeaway"); 
-    if (button.dataset.orderType === "takeaway") {
-      state.setTable(null);
-      tableDisplay.textContent = "Table";
-    }
-  }));
   
   mount.querySelector("#pos-next").addEventListener("click", openReview);
-  mount.querySelector("#pos-orders").addEventListener("click", openOrdersDrawer);
+
+  async function openLiveTabDashboard() {
+    const tableId = isCustomerMode ? currentTableObj.id : state.getState().tableId;
+    if (!tableId) return;
+
+    const btn = mount.querySelector("#customer-live-tab");
+    if (btn) { btn.classList.remove("qty-pulse"); void btn.offsetWidth; btn.classList.add("qty-pulse"); }
+
+    const { data: session } = await supabase.from("dining_sessions")
+      .select("id, status")
+      .eq("table_id", tableId)
+      .in("status", ["open", "bill_requested", "bill_ready"])
+      .maybeSingle();
+
+    if (!session) return showToast("Tab is empty", "Add items to your cart and tap Next to start a tab.");
+
+    const { data: order } = await supabase.from("orders").select("*").eq("session_id", session.id).limit(1).maybeSingle();
+    if (!order) return showToast("Tab is empty", "Add items to your cart and tap Next to start a tab.");
+
+    showActiveOrderDashboard({ order, settings, current_state: { tableId, orderType: "dine_in" }, sessionKey: tableId });
+  }
 
   realtimeChannel = supabase.channel(`live-orders-${crypto.randomUUID()}`)
     .on("postgres_changes", { event: "INSERT", schema: "public", table: "orders" }, payload => {
-      if (payload.new?.source !== "customer") return;
       unreadOrders += 1;
       const badge = mount.querySelector("#pos-order-badge");
-      badge.textContent = String(unreadOrders);
-      badge.classList.remove("hidden");
-      showToast("New table order", `Order #${payload.new.order_number} has arrived.`);
+      if (badge) {
+        badge.textContent = String(unreadOrders);
+        badge.classList.remove("hidden");
+      }
+      showToast("New table order", `Order #${payload.new?.order_number || ''} has arrived.`);
+      
+      // Auto-refresh Admin drawer if it is currently open
+      if (document.querySelector(".session-scroll-container")) openOrdersDrawer();
     })
     .on("postgres_changes", { event: "UPDATE", schema: "public", table: "dining_sessions" }, payload => {
-      if (payload.new?.status === "bill_requested") showToast("Bill requested", "A table is waiting for the final bill.");
+      if (payload.new?.status === "bill_requested") {
+        showToast("Bill Requested", `A table requested the final bill.`);
+        // Auto-refresh Admin drawer when customer clicks "Finish Meal"
+        if (document.querySelector(".session-scroll-container")) openOrdersDrawer();
+      }
     })
     .subscribe(status => { const node = mount.querySelector("#pos-connection"); if (!node) return; const live = status === "SUBSCRIBED"; node.innerHTML = `<span class="connection-dot ${live ? "live" : "offline"}"></span>${live ? "Live" : "Offline"}`; });
 
@@ -347,6 +339,7 @@ export async function render({ mount }) {
     
     let html = ``;
     if (!searchTerm) {
+      // 100% PARITY: Both Customer and POS use the exact same floating dropdown header
       html += `
         <div class="drill-down-header floating-header">
           <div style="display: flex; align-items: center; gap: 8px;">
@@ -523,9 +516,11 @@ export async function render({ mount }) {
     const total = current.items.reduce((sum, i) => sum + (i.price * i.quantity), 0);
     
     mount.querySelector("#pos-cart-count").textContent = `${count} ${count === 1 ? "item" : "items"}`;
+    
+    // 100% PARITY: Exact same total text for both Staff and Customers
     mount.querySelector("#pos-cart-total").textContent = count > 0 ? `Total: ${money(total, settings.currency_symbol)}` : "Tap Next to review";
     
-    mount.querySelector("#pos-next").disabled = false;
+    mount.querySelector("#pos-next").disabled = count === 0;
 
     const actionBar = mount.querySelector(".pos-action-bar");
     if (actionBar) {
@@ -542,11 +537,13 @@ export async function render({ mount }) {
     if (!state.canSubmit()) { 
       // Smart Redirect: If it's dine-in and no table is selected, instantly pop open the table modal!
       if (current.orderType === "dine_in" && !current.tableId) {
-        window._autoReviewPending = true; // Leaves a secure flag for the Table Modal to catch
-        mount.querySelector("#pos-table-wrap").click();
-        return;
+        window._autoReviewPending = true; 
+        const tableWrap = mount.querySelector("#pos-table-wrap");
+        if (tableWrap) {
+            tableWrap.click();
+            return;
+        }
       }
-      // Otherwise, it means their cart is empty
       showToast("Complete the order", "Add at least one dish.", "error"); 
       return; 
     }
@@ -589,58 +586,92 @@ export async function render({ mount }) {
 
   async function submitPOSOrder(closeModal) {
     const current = state.getState();
-    const sessionKey = current.orderType === "dine_in" ? current.tableId : "takeaway_session";
-    const openOrderId = activeTableOrders[sessionKey];
+    const posSessionKey = current.orderType === "dine_in" ? current.tableId : "takeaway_session";
+    const openOrderId = activeTableOrders[posSessionKey];
 
     try {
       let result;
-      
       if (openOrderId) {
-        // SYNC local cart exactly with the database overwriting with new state
         const { data, error } = await supabase.rpc("sync_pos_order", { p_order_id: openOrderId, p_items: state.toServerItems() });
         if (error) throw error;
         result = data;
-        showToast("Kitchen Updated", `Order #${result.order_number} has been updated.`);
+        if (!isCustomerMode) showToast("Kitchen Updated", `Order #${result.order_number} has been updated.`);
       } else {
-        // CREATE a brand new bill
-        const { data, error } = await supabase.rpc("create_pos_order", { p_order_type: current.orderType, p_table_id: current.tableId, p_items: state.toServerItems(), p_note: null });
+        const { data, error } = await supabase.rpc("create_pos_order", { p_order_type: current.orderType, p_table_id: current.tableId, p_items: state.toServerItems(), p_note: isCustomerMode ? "Customer Self-Order" : null });
         if (error) throw error;
         result = data?.[0] ?? data;
         if (!result?.order_number) throw new Error("The restaurant did not return an order number.");
-        showToast("Order sent to kitchen", `Order #${result.order_number} is being prepared.`);
+        if (!isCustomerMode) showToast("Order sent to kitchen", `Order #${result.order_number} is being prepared.`);
       }
 
-      // 💡 DO NOT clear the cart! The local cart stays perfectly intact until checkout.
-      activeTableOrders[sessionKey] = result.id;
+      activeTableOrders[posSessionKey] = result.id;
+      
+      // 100% PARITY: Both Staff and Customers clear their local cart immediately upon sending to the kitchen
+      state.clear(); 
       closeModal(); 
       
-      // Send them to the Checkout Dashboard
-      showActiveOrderDashboard({ order: result, settings, current_state: current, sessionKey });
-    } catch (error) { showToast("Order failed", error.message, "error"); }
+      // EVERYONE is routed to the exact same Active Dashboard to view their live tab
+      showActiveOrderDashboard({ order: result, settings, current_state: current, sessionKey: posSessionKey });
+
+    } catch (error) { 
+      showToast("Order failed", error.message, "error"); 
+      console.error("Order Submission Error:", error);
+    }
   }
 
   function showActiveOrderDashboard({ order, settings, current_state, sessionKey }) {
     const t = tables.find(x => x.id === current_state.tableId);
-    const titleStr = current_state.orderType === "dine_in" ? `Table ${t ? t.table_no : "Unknown"} · Active Order` : `Takeaway · Active Order`;
-    let activeOrder = order;
+    const titleStr = current_state.orderType === "dine_in" ? `Table ${t ? t.table_no : "Unknown"} · Live Tab` : `Takeaway · Active Order`;
+    
+    let displayItems = [];
+    let aggregatedBill = { subtotal: 0, cgst: 0, sgst: 0, rounding: 0, grand_total: 0 };
+    let rootOrder = order;
 
     const modal = openAppModal({
       title: titleStr,
-      subtitle: "Your order is open. Add more items or complete your bill.",
-      body: `<div id="active-dash-host"></div>`,
+      subtitle: "Your live table tab. Add more items or request the final bill.",
+      body: `<div id="active-dash-host"><div class="empty-state"><i class="ph ph-spinner-gap qty-pulse"></i><span>Syncing live tab...</span></div></div>`,
       actions: [
         { label: "Keep Ordering", icon: "ph-plus-circle", className: "btn-quiet", onClick: ({ close }) => close() },
-        { label: "Complete Order", icon: "ph-check-circle", className: "btn-primary", onClick: ({ close }) => {
+        { label: isCustomerMode ? "Finish Meal" : "Complete Order", icon: "ph-check-circle", className: "btn-primary", onClick: ({ close }) => {
+            // UNIFIED CHECKOUT: Prompts for Final Bill Generation on both Staff and Customer sides
             openAppModal({
               title: "Generate Final Bill?",
-              subtitle: "Confirm you are finished with this order.",
-              body: `<div class="danger-confirm"><div class="danger-confirm-icon" style="background: var(--sage-200); color: var(--forest-900);"><i class="ph-bold ph-receipt"></i></div><h3>Generate Final Bill?</h3><p>This will generate the PDF receipt. You cannot add more items after this.</p></div>`,
+              subtitle: "Confirm you are finished adding items to this table.",
+              body: `<div class="danger-confirm"><div class="danger-confirm-icon" style="background: var(--sage-200); color: var(--forest-900);"><i class="ph-bold ph-receipt"></i></div><h3>Generate Final Bill?</h3><p>This will finalize the tab and lock the table from further ordering.</p></div>`,
               actions: [
                 { label: "No, Go Back", className: "btn-quiet", onClick: (ctx) => ctx.close() },
                 { label: "Yes, I'm Done", className: "btn-primary", onClick: async (ctx) => {
+                    ctx.button.disabled = true;
+                    try {
+                      if (current_state.orderType === "dine_in") {
+                        if (isCustomerMode) {
+                          const token = customerSessionToken || localStorage.getItem(`fourflavours.session.${current_state.tableId}`);
+                          await supabase.rpc("request_session_bill", { p_table_id: current_state.tableId, p_session_token: token });
+                        } else {
+                          const { data: sess } = await supabase.from("dining_sessions").select("id").eq("table_id", current_state.tableId).in("status", ["open", "bill_requested"]).maybeSingle();
+                          if (sess) await supabase.rpc("mark_session_bill_ready", { p_session_id: sess.id });
+                        }
+                      }
+                    } catch(e) { console.error("Failed to close table:", e); }
+                    
                     ctx.close(); close(); 
-                    showReceiptPreview({ order: activeOrder, items: state.getState().items, settings, current_state }); 
-                    state.clear();
+                    
+                    // Inject the mathematically perfect aggregated totals across all rounds into the final receipt!
+                    showReceiptPreview({ 
+                      order: {
+                        ...rootOrder,
+                        subtotal: aggregatedBill.subtotal,
+                        cgst: aggregatedBill.cgst,
+                        sgst: aggregatedBill.sgst,
+                        rounding: aggregatedBill.rounding,
+                        grand_total: aggregatedBill.grand_total
+                      }, 
+                      items: displayItems, 
+                      settings, 
+                      current_state 
+                    }); 
+                    
                     delete activeTableOrders[sessionKey];
                 }}
               ]
@@ -650,22 +681,85 @@ export async function render({ mount }) {
       ]
     });
 
+    let syncTimer = setInterval(fetchLiveSession, 3000);
+    const originalClose = modal.close;
+    modal.close = () => { clearInterval(syncTimer); originalClose(); };
+
+    async function fetchLiveSession() {
+      // 100% PARITY FIX: Delete restrictive Customer RPCs. 
+      // Everyone reads directly from the tables to guarantee perfect syncing and eliminate empty lists!
+      if (current_state.orderType === "takeaway") {
+         const { data } = await supabase.from("orders").select("*, order_items(*)").eq("id", rootOrder.id).single();
+         if (data) processOrders([data]);
+         return;
+      }
+      
+      const { data: session } = await supabase.from("dining_sessions").select("id").eq("table_id", current_state.tableId).in("status", ["open", "bill_requested", "bill_ready"]).maybeSingle();
+      if (session) {
+         const { data } = await supabase.from("orders").select("*, order_items(*)").eq("session_id", session.id).neq("status", "cancelled").order("created_at", { ascending: true });
+         if (data) processOrders(data);
+      } else {
+         const { data } = await supabase.from("orders").select("*, order_items(*)").eq("id", rootOrder.id).single();
+         if (data) processOrders([data]);
+      }
+    }
+
+    function processOrders(ordersList) {
+      let tempMap = new Map();
+      aggregatedBill = { subtotal: 0, cgst: 0, sgst: 0, rounding: 0, grand_total: 0 };
+      
+      ordersList.forEach(o => {
+        aggregatedBill.subtotal += Number(o.subtotal || 0);
+        aggregatedBill.cgst += Number(o.cgst || 0);
+        aggregatedBill.sgst += Number(o.sgst || 0);
+        aggregatedBill.rounding += Number(o.rounding || 0);
+        aggregatedBill.grand_total += Number(o.grand_total || 0);
+
+        const itemsArray = o.items || o.order_items || []; 
+        
+        // Strict chronological sort ensures additions always append cleanly to the bottom
+        itemsArray.sort((a, b) => (a.id || 0) - (b.id || 0));
+
+        itemsArray.forEach(oi => {
+          const pId = oi.product_id;
+          const qty = Number(oi.quantity);
+          if (tempMap.has(pId)) {
+             tempMap.get(pId).quantity += qty;
+          } else {
+             const productObj = products.find(p => p.id === pId);
+             tempMap.set(pId, { 
+               id: pId, 
+               name: productObj ? productObj.name : (oi.name_snapshot || oi.product_name || oi.name || "Unknown Item"), 
+               price: oi.unit_price || oi.price, 
+               quantity: qty 
+             });
+          }
+        });
+      });
+
+      displayItems = Array.from(tempMap.values());
+      renderDash();
+    }
+
     function renderDash() {
       const host = modal.root.querySelector("#active-dash-host");
       if (!host) return;
+      
+      const listContainer = host.querySelector(".dining-items-list");
+      const currentScroll = listContainer ? listContainer.scrollTop : 0;
 
       host.innerHTML = `
         <div class="active-dining-dashboard">
           <div class="dining-status-banner">
             <i class="ph-bold ph-cooking-pot"></i>
             <div>
-              <strong>Order #${activeOrder.order_number} is open</strong>
-              <span id="dash-live-total">Live Total: ${money(activeOrder.grand_total, settings.currency_symbol)}</span>
+              <strong>Table Tab is Open</strong>
+              <span id="dash-live-total">Live Total: ${money(aggregatedBill.grand_total, settings.currency_symbol)}</span>
             </div>
           </div>
-          <h3 class="dining-section-title">Current Order Items</h3>
+          <h3 class="dining-section-title">Current Table Items <span style="font-size: 10px; font-weight: normal; color: var(--gold-600); margin-left: 8px; text-transform: uppercase;"><i class="ph-bold ph-arrows-clockwise" style="margin-right:3px;"></i>Live Sync</span></h3>
           <div class="dining-items-list" style="max-height: 40vh; overflow-y: auto;">
-            ${state.getState().items.map(i => `
+            ${displayItems.map(i => `
               <div class="dining-item-row">
                 <div class="dining-item-info">
                   <strong>${escapeHtml(i.name)} <span class="qty-badge" id="dash-qty-${i.id}">x${i.quantity}</span></strong>
@@ -682,36 +776,35 @@ export async function render({ mount }) {
 
       host.querySelectorAll(".dash-repeat-btn").forEach(btn => {
         btn.addEventListener("click", async () => {
-          // 1. Animate the button click for visual feedback
-          btn.classList.remove("qty-pulse");
-          void btn.offsetWidth;
-          btn.classList.add("qty-pulse");
-
-          // 2. Increment in local cart instantly
-          const id = btn.dataset.id;
-          state.increment(id);
+          btn.classList.remove("qty-pulse"); void btn.offsetWidth; btn.classList.add("qty-pulse");
+          const productId = btn.dataset.id;
           
-          // 3. Update the UI quantity badge instantly without full re-render
-          const updatedItem = state.getState().items.find(x => x.id === id);
-          const badge = host.querySelector(`#dash-qty-${id}`);
-          if (badge && updatedItem) badge.innerText = `x${updatedItem.quantity}`;
-
-          // 4. Sync quietly in the background to update the kitchen and total
           try {
             btn.disabled = true;
-            const { data, error } = await supabase.rpc("sync_pos_order", { p_order_id: activeOrder.id, p_items: state.toServerItems() });
-            if (!error && data) {
-              activeOrder = data;
-              const totalEl = host.querySelector("#dash-live-total");
-              if (totalEl) totalEl.innerText = `Live Total: ${money(activeOrder.grand_total, settings.currency_symbol)}`;
-            }
-          } catch(e) { console.error("Sync failed:", e); } 
-          finally { btn.disabled = false; }
+            const p = products.find(x => x.id === productId);
+            if (!p) throw new Error("Item not found in menu.");
+            
+            // UNIFIED REPEAT LOGIC: Completely bypasses the broken Customer RPC and uses the clean Append RPC
+            await supabase.rpc("append_pos_order", { 
+                p_order_id: rootOrder.id, 
+                p_items: [{ id: productId, name: p.name, price: p.price, quantity: 1 }] 
+            });
+            
+            await fetchLiveSession(); 
+          } catch(e) { 
+            console.error("Sync failed:", e); 
+            showToast("Repeat failed", "Could not repeat this item.", "error");
+          } finally { 
+            btn.disabled = false; 
+          }
         });
       });
+
+      const newListContainer = host.querySelector(".dining-items-list");
+      if (newListContainer) newListContainer.scrollTop = currentScroll;
     }
 
-    renderDash();
+    fetchLiveSession();
   }
 
   async function showReceiptPreview({ order, items, settings, current_state }) {
@@ -723,7 +816,6 @@ export async function render({ mount }) {
 
     const date = new Date().toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 
-    // This is the exact DOM structure that will be printed
     const receiptHTML = `
       <article class="thermal-receipt" id="thermal-receipt-content">
         <header class="thermal-head">
@@ -776,15 +868,16 @@ export async function render({ mount }) {
     `;
 
     const modal = openAppModal({
-      title: `Order #${order.order_number} Confirmed`,
-      subtitle: "Review the generated bill before printing.",
+      title: isCustomerMode ? "Your Digital Bill" : `Order #${order.order_number} Confirmed`,
+      subtitle: isCustomerMode ? "Please pay at the counter or show this to your waiter." : "Review the generated bill before printing.",
       body: `<div class="receipt-preview-container">${receiptHTML}</div>`,
-      actions: [
+      actions: isCustomerMode ? [
+        { label: "Close & Start New Order", icon: "ph-check", className: "btn-primary", onClick: ({ close }) => { close(); window.location.reload(); } }
+      ] : [
         { label: "Close", icon: "ph-x", className: "btn-quiet", onClick: ({ close }) => close() },
         { label: "Print Bill", icon: "ph-printer", className: "btn-primary", onClick: () => {
             const host = document.querySelector("#receipt-print-host");
             if (host) {
-              // Copy the fully rendered HTML (including the QR canvas) to the print host
               host.innerHTML = modal.root.querySelector("#thermal-receipt-content").outerHTML;
               window.print();
             }
@@ -793,19 +886,15 @@ export async function render({ mount }) {
     });
 
     if (settings.upi_id && globalThis.QRCode) {
-      // 50ms delay ensures the DOM is fully painted before drawing the QR Canvas
       setTimeout(() => {
         const qr = modal.root.querySelector("#thermal-upi");
         if (qr) {
-          qr.innerHTML = ""; // Clears any old artifacts
-          
-          // Strictly encode the parameters to ensure 100% compatibility with all UPI apps
+          qr.innerHTML = "";
           const pa = encodeURIComponent(settings.upi_id.trim());
           const pn = encodeURIComponent(settings.restaurant_name.trim());
           const am = Number(order.grand_total).toFixed(2);
           const tn = encodeURIComponent(`Order #${order.order_number}`);
           const upiString = `upi://pay?pa=${pa}&pn=${pn}&am=${am}&cu=INR&tn=${tn}`;
-          
           new QRCode(qr, { text: upiString, width: 160, height: 160, correctLevel: QRCode.CorrectLevel.M });
         }
       }, 50);
@@ -814,7 +903,7 @@ export async function render({ mount }) {
 
   async function openOrdersDrawer() {
     unreadOrders = 0;
-    const badge = mount.querySelector("#pos-order-badge"); badge.classList.add("hidden"); badge.textContent = "0";
+    const badge = mount.querySelector("#pos-order-badge"); if (badge) { badge.classList.add("hidden"); badge.textContent = "0"; }
     const { data: sessions, error } = await supabase.from("dining_sessions").select("*").neq("status", "closed").order("bill_requested_at", { ascending: false, nullsFirst: false }).order("created_at", { ascending: false });
     if (error) return showToast("Could not load table orders", error.message, "error");
 
@@ -870,88 +959,6 @@ export async function render({ mount }) {
         await openOrdersDrawer();
       } catch (error) { paymentModal.root.querySelectorAll(".payment-choice").forEach(el => el.disabled = false); showToast("Could not complete payment", error.message, "error"); }
     }));
-  }
-
-  async function printReceipt({ order, items, settings }) {
-    const host = document.querySelector("#receipt-print-host"); if (!host) return;
-    
-    let tableString = "Takeaway";
-    if (order.order_type === "dine_in" && order.table_id) {
-      const t = tables.find(x => x.id === order.table_id);
-      if (t) tableString = `Dine-in · Table ${t.table_no}`;
-    }
-
-    const date = new Date().toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-
-    host.innerHTML = `
-      <article class="thermal-receipt">
-        <header class="thermal-head">
-          <img class="thermal-logo" src="${versionedAsset("assets/images/website_logo.png")}" alt="Logo">
-          <h1>${escapeHtml(settings.restaurant_name)}</h1>
-          ${settings.restaurant_address ? `<p>${escapeHtml(settings.restaurant_address).replace(/\n/g, '<br>')}</p>` : ''}
-          ${settings.gst_number ? `<p><strong>GSTIN:</strong> ${escapeHtml(settings.gst_number)}</p>` : ''}
-        </header>
-        <div class="thermal-meta">
-          <div><span>Order:</span> <strong>#${escapeHtml(order.order_number)}</strong></div>
-          <div><span>Date:</span> <strong>${date}</strong></div>
-          <div><span>Type:</span> <strong>${escapeHtml(tableString)}</strong></div>
-        </div>
-        <table class="thermal-items-table">
-          <thead>
-            <tr>
-              <th style="text-align: left;">Item</th>
-              <th style="text-align: center;">Qty</th>
-              <th style="text-align: right;">Total</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${items.map(i => `
-              <tr>
-                <td style="text-align: left;">${escapeHtml(i.name)}<br><small>${money(i.price, settings.currency_symbol)}</small></td>
-                <td style="text-align: center;">${i.quantity}</td>
-                <td style="text-align: right;">${money(Number(i.price) * Number(i.quantity), settings.currency_symbol)}</td>
-              </tr>
-            `).join("")}
-          </tbody>
-        </table>
-        <div class="thermal-totals-wrap">
-          <div class="thermal-line"><span>Subtotal</span><strong>${money(order.subtotal, settings.currency_symbol)}</strong></div>
-          <div class="thermal-line"><span>CGST (${settings.cgst_rate}%)</span><strong>${money(order.cgst, settings.currency_symbol)}</strong></div>
-          <div class="thermal-line"><span>SGST (${settings.sgst_rate}%)</span><strong>${money(order.sgst, settings.currency_symbol)}</strong></div>
-          <div class="thermal-line"><span>Rounding</span><strong>${money(order.rounding, settings.currency_symbol)}</strong></div>
-          <div class="thermal-line thermal-grand"><span>GRAND TOTAL</span><strong>${money(order.grand_total, settings.currency_symbol)}</strong></div>
-        </div>
-        ${settings.upi_id ? `
-          <div class="thermal-payment-block">
-            <div class="thermal-qr" id="thermal-upi"></div>
-            <div class="thermal-upi-note"><strong>Scan to pay</strong><br>Supported by all UPI apps</div>
-          </div>
-        ` : ""}
-        <footer class="thermal-foot">
-          <p>${escapeHtml(settings.receipt_footer || 'Thank you for dining with us!')}</p>
-          <div class="thermal-software-tag">Powered by Four Flavours POS</div>
-        </footer>
-      </article>
-    `;
-
-    if (settings.upi_id && globalThis.QRCode) {
-      const qr = host.querySelector("#thermal-upi");
-      if (qr) {
-        qr.innerHTML = "";
-        
-        const pa = encodeURIComponent(settings.upi_id.trim());
-        const pn = encodeURIComponent(settings.restaurant_name.trim());
-        const am = Number(order.grand_total).toFixed(2);
-        const tn = encodeURIComponent(`Order #${order.order_number}`);
-        const upiString = `upi://pay?pa=${pa}&pn=${pn}&am=${am}&cu=INR&tn=${tn}`;
-        
-        new QRCode(qr, { text: upiString, width: 160, height: 160, correctLevel: QRCode.CorrectLevel.M });
-        
-        // 100ms pause guarantees the browser finishes generating the canvas before the print dialog locks the thread
-        await new Promise(r => setTimeout(r, 100)); 
-      }
-    }
-    window.print();
   }
 
   return async () => { 

@@ -967,7 +967,7 @@ async function renderAdminWorkspace(mount) {
   async function openAdminTableManager(table, session) {
     const modal = openAppModal({
       title: `Table ${table.table_no} Management`,
-      subtitle: "Review the active order, add items, or close the table.",
+      subtitle: "Review the active table tab, add items, or close the table.",
       body: `<div id="admin-table-manager-host"><div class="empty-state"><i class="ph ph-spinner-gap ph-spin"></i><strong>Loading table data...</strong></div></div>`,
       actions: [
         { label: "Close Window", icon: "ph-x", className: "btn-quiet", onClick: ({ close }) => close() }
@@ -976,155 +976,212 @@ async function renderAdminWorkspace(mount) {
 
     const host = modal.root.querySelector("#admin-table-manager-host");
     
-    try {
-      const { data: orders, error } = await supabase.from("orders").select("*, order_items(*)").eq("session_id", session.id).neq("status", "cancelled").order("created_at", { ascending: false }).limit(1);
-      if (error) throw error;
-      const activeOrder = orders?.[0];
+    async function renderManager() {
+      try {
+        // FETCH ALL ORDERS: Aggregate every round the customer ordered into one Master Tab
+        const { data: ordersList, error } = await supabase.from("orders").select("*, order_items(*)").eq("session_id", session.id).neq("status", "cancelled").order("created_at", { ascending: true });
+        if (error) throw error;
 
-      // If session is open but no food ordered yet
-      if (!activeOrder) {
-        host.innerHTML = `<div class="empty-state"><i class="ph ph-warning-circle"></i><strong>No active order found</strong><span>The table session was opened, but no items were sent to the kitchen.</span></div><div style="display:flex; gap: 10px; justify-content:center;"><button class="btn btn-primary" id="admin-add-items"><i class="ph-bold ph-plus"></i> Add Items</button> <button class="btn btn-danger" id="force-close-empty"><i class="ph-bold ph-power"></i> Force Close Table</button></div>`;
-        
-        host.querySelector("#force-close-empty").addEventListener("click", async () => {
-           await supabase.from("dining_sessions").update({ status: 'closed' }).eq("id", session.id);
-           modal.close();
-           reload();
-        });
-        
-        host.querySelector("#admin-add-items").addEventListener("click", () => {
-           modal.close();
-           window.__FOUR_FLAVOURS_POS_STATE__?.setOrderType('dine_in');
-           window.__FOUR_FLAVOURS_POS_STATE__?.setTable(table);
-           document.querySelector('[data-nav="pos"]')?.click();
-        });
-        return;
-      }
+        if (!ordersList || ordersList.length === 0) {
+          host.innerHTML = `<div class="empty-state"><i class="ph ph-warning-circle"></i><strong>No active order found</strong><span>The table session was opened, but no items were sent to the kitchen.</span></div><div style="display:flex; gap: 10px; justify-content:center;"><button class="btn btn-primary" id="admin-add-items"><i class="ph-bold ph-plus"></i> Add Items</button> <button class="btn btn-danger" id="force-close-empty"><i class="ph-bold ph-power"></i> Force Close Table</button></div>`;
+          
+          host.querySelector("#force-close-empty").addEventListener("click", async () => {
+             await supabase.from("dining_sessions").update({ status: 'closed' }).eq("id", session.id);
+             modal.close();
+             reload();
+          });
+          
+          host.querySelector("#admin-add-items").addEventListener("click", () => {
+             modal.close();
+             window.__FOUR_FLAVOURS_POS_STATE__?.setOrderType('dine_in');
+             window.__FOUR_FLAVOURS_POS_STATE__?.setTable(table);
+             document.querySelector('[data-nav="pos"]')?.click();
+          });
+          return;
+        }
 
-      host.innerHTML = `
-        <div class="active-dining-dashboard" style="text-align: left;">
-          <div class="dining-status-banner">
-            <i class="ph-bold ph-receipt"></i>
-            <div>
-              <strong>Order #${activeOrder.order_number} is open</strong>
-              <span>Grand Total: ${money(activeOrder.grand_total, settings.currency_symbol)}</span>
+        let tempMap = new Map();
+        let grandTotal = 0, subtotal = 0, cgst = 0, sgst = 0, rounding = 0;
+        let latestOrder = ordersList[ordersList.length - 1]; // We append new items to the latest round
+
+        ordersList.forEach(o => {
+          grandTotal += Number(o.grand_total || 0);
+          subtotal += Number(o.subtotal || 0);
+          cgst += Number(o.cgst || 0);
+          sgst += Number(o.sgst || 0);
+          rounding += Number(o.rounding || 0);
+          
+          // SORTING FIX: Force the items to sort by ID so Admin additions ALWAYS appear at the bottom!
+          const items = o.order_items || [];
+          items.sort((a, b) => a.id - b.id);
+          
+          items.forEach(oi => {
+            const pId = oi.product_id;
+            const qty = Number(oi.quantity);
+            if (tempMap.has(pId)) {
+               tempMap.get(pId).quantity += qty;
+            } else {
+               tempMap.set(pId, { id: pId, name: oi.name_snapshot, price: oi.unit_price, quantity: qty });
+            }
+          });
+        });
+
+        const displayItems = Array.from(tempMap.values());
+
+        host.innerHTML = `
+          <div class="active-dining-dashboard" style="text-align: left;">
+            <div class="dining-status-banner">
+              <i class="ph-bold ph-receipt"></i>
+              <div>
+                <strong>Table Tab is open</strong>
+                <span>Grand Total: ${money(grandTotal, settings.currency_symbol)}</span>
+              </div>
+            </div>
+            <h3 class="dining-section-title">Customer's Order Items</h3>
+            <div class="dining-items-list" style="max-height: 40vh; overflow-y: auto; margin-bottom: 16px;">
+              ${displayItems.map(i => `
+                <div class="dining-item-row" style="padding-right: 12px; align-items: center;">
+                  <div class="dining-item-info">
+                    <strong>${escapeHtml(i.name)} <span class="qty-badge">x${i.quantity}</span></strong>
+                    <span>${money(i.price, settings.currency_symbol)}</span>
+                  </div>
+                  <button class="btn-primary btn-sm admin-repeat-btn" data-id="${i.id}" data-name="${escapeHtml(i.name)}" data-price="${i.price}" style="padding: 4px 12px; font-size: 12px; border-radius: 6px;">
+                    <i class="ph-bold ph-arrow-counter-clockwise"></i> Repeat
+                  </button>
+                </div>
+              `).join("")}
+            </div>
+            <div style="display: flex; gap: 8px; border-top: 1px solid var(--line); padding-top: 16px;">
+              <button class="btn btn-quiet" id="admin-add-items" style="flex: 1; padding: 0 4px; font-size: 12px;"><i class="ph-bold ph-plus"></i> Add Items</button>
+              <button class="btn btn-quiet" id="admin-view-bill" style="flex: 1; padding: 0 4px; font-size: 12px;"><i class="ph-bold ph-printer"></i> Bill</button>
+              <button class="btn btn-primary" id="admin-close-table" style="flex: 1.5; padding: 0 4px; font-size: 12px;"><i class="ph-bold ph-check-circle"></i> Close Table</button>
             </div>
           </div>
-          <h3 class="dining-section-title">Customer's Order Items</h3>
-          <div class="dining-items-list" style="max-height: 40vh; overflow-y: auto; margin-bottom: 16px;">
-            ${activeOrder.order_items.map(i => `
-              <div class="dining-item-row" style="padding-right: 12px;">
-                <div class="dining-item-info">
-                  <strong>${escapeHtml(i.name_snapshot)} <span class="qty-badge">x${i.quantity}</span></strong>
-                  <span>${money(i.unit_price, settings.currency_symbol)}</span>
-                </div>
-                <strong>${money(Number(i.unit_price) * Number(i.quantity), settings.currency_symbol)}</strong>
-              </div>
-            `).join("")}
-          </div>
-          <div style="display: flex; gap: 8px; border-top: 1px solid var(--line); padding-top: 16px;">
-            <button class="btn btn-quiet" id="admin-add-items" style="flex: 1; padding: 0 4px; font-size: 12px;"><i class="ph-bold ph-plus"></i> Add Items</button>
-            <button class="btn btn-quiet" id="admin-view-bill" style="flex: 1; padding: 0 4px; font-size: 12px;"><i class="ph-bold ph-printer"></i> Bill</button>
-            <button class="btn btn-primary" id="admin-close-table" style="flex: 1.5; padding: 0 4px; font-size: 12px;"><i class="ph-bold ph-check-circle"></i> Close Table</button>
-          </div>
-        </div>
-      `;
+        `;
 
-      // Render simple inline list for Admin to quick-add items
-      host.querySelector("#admin-add-items").addEventListener("click", () => {
-         const allActiveProducts = window.__FOUR_FLAVOURS_POS_STATE__ ? window.__FOUR_FLAVOURS_POS_STATE__.getState().settings.products : [];
-         
-         function renderAdminItemList(list) {
-            if (!list || !list.length) return `<div class="empty-state compact"><i class="ph ph-magnifying-glass"></i><strong>No dishes found</strong></div>`;
-            return list.map(p => `
-               <div style="display:flex; justify-content:space-between; align-items:center; padding: 14px 0; border-bottom: 1px solid var(--cream-200);">
-                  <div style="display:flex; flex-direction:column; gap:4px;">
-                     <strong style="font-size: 14px; color: var(--forest-950);">${escapeHtml(p.name)}</strong>
-                     <span style="font-size:12.5px; color:var(--muted);">${money(p.price, settings.currency_symbol)}</span>
-                  </div>
-                  <button class="btn btn-quiet btn-small admin-quick-add-btn" data-quick-add="${p.id}" data-name="${escapeHtml(p.name)}" data-price="${p.price}"><i class="ph-bold ph-plus"></i> Add 1</button>
-               </div>
-            `).join("");
-         }
-
-         host.innerHTML = `
-           <div class="admin-add-item-list" style="text-align: left;">
-              <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 16px;">
-                 <button class="icon-btn icon-btn-light" id="back-to-manager"><i class="ph-bold ph-arrow-left"></i></button>
-                 <h3 style="margin: 0; font-size: 16px;">Add Items to Table ${escapeHtml(table.table_no)}</h3>
-              </div>
-              <div class="search-input-wrap" style="margin-bottom: 16px;">
-                <i class="ph-bold ph-magnifying-glass"></i>
-                <input type="text" id="admin-item-search" placeholder="Search menu..." style="width:100%; border:none; background:transparent; outline:none; font-size: 15px; font-weight:700;">
-              </div>
-              <div id="admin-item-grid" style="max-height: 48vh; overflow-y: auto; padding-right: 8px;">
-                ${renderAdminItemList(products.filter(p => p.is_active))}
-              </div>
-           </div>
-         `;
-         
-         host.querySelector("#back-to-manager").addEventListener("click", () => openAdminTableManager(table, session));
-         
-         host.querySelector("#admin-item-search").addEventListener("input", (e) => {
-            const q = e.target.value.toLowerCase();
-            const filtered = products.filter(p => p.is_active && p.name.toLowerCase().includes(q));
-            host.querySelector("#admin-item-grid").innerHTML = renderAdminItemList(filtered);
-         });
-
-         host.addEventListener("click", async (e) => {
-            const addBtn = e.target.closest(".admin-quick-add-btn");
-            if (addBtn) {
-               addBtn.disabled = true;
-               addBtn.innerHTML = `<i class="ph ph-spinner-gap ph-spin"></i>`;
-               try {
-                  // Instantly append to database. The customer's screen will realtime sync automatically!
-                  await supabase.rpc('append_pos_order', { 
-                      p_order_id: activeOrder.id, 
-                      p_items: [{ id: addBtn.dataset.quickAdd, name: addBtn.dataset.name, price: addBtn.dataset.price, quantity: 1 }] 
-                  });
-                  showToast("Item Added", `${addBtn.dataset.name} sent to Table ${table.table_no}`);
-                  // Refresh manager view instantly
-                  openAdminTableManager(table, session);
-               } catch (err) {
-                  showToast("Error", err.message, "error");
-                  addBtn.disabled = false;
-                  addBtn.innerHTML = `<i class="ph-bold ph-plus"></i> Add 1`;
-               }
+        // REPEAT BUTTON LOGIC
+        host.querySelectorAll(".admin-repeat-btn").forEach(btn => {
+          btn.addEventListener("click", async () => {
+            btn.disabled = true;
+            btn.innerHTML = `<i class="ph ph-spinner-gap ph-spin"></i>`;
+            try {
+              // Reuse the secure append RPC
+              await supabase.rpc('append_pos_order', { 
+                  p_order_id: latestOrder.id, 
+                  p_items: [{ id: btn.dataset.id, name: btn.dataset.name, price: btn.dataset.price, quantity: 1 }] 
+              });
+              showToast("Item Repeated", `${btn.dataset.name} added to Table ${table.table_no}`);
+              renderManager(); // Refresh Admin drawer instantly
+            } catch (err) {
+              showToast("Error", err.message, "error");
+              btn.disabled = false;
+              btn.innerHTML = `<i class="ph-bold ph-arrow-counter-clockwise"></i> Repeat`;
             }
-         });
-      });
+          });
+        });
 
-      host.querySelector("#admin-view-bill").addEventListener("click", () => {
-         showAdminReceiptPreview(activeOrder);
-      });
+        // QUICK ADD ITEMS LOGIC
+        host.querySelector("#admin-add-items").addEventListener("click", () => {
+           const allActiveProducts = products.filter(p => p.is_active);
+           
+           function renderAdminItemList(list) {
+              if (!list || !list.length) return `<div class="empty-state compact"><i class="ph ph-magnifying-glass"></i><strong>No dishes found</strong></div>`;
+              return list.map(p => `
+                 <div style="display:flex; justify-content:space-between; align-items:center; padding: 14px 0; border-bottom: 1px solid var(--cream-200);">
+                    <div style="display:flex; flex-direction:column; gap:4px;">
+                       <strong style="font-size: 14px; color: var(--forest-950);">${escapeHtml(p.name)}</strong>
+                       <span style="font-size:12.5px; color:var(--muted);">${money(p.price, settings.currency_symbol)}</span>
+                    </div>
+                    <button class="btn btn-quiet btn-small admin-quick-add-btn" data-quick-add="${p.id}" data-name="${escapeHtml(p.name)}" data-price="${p.price}"><i class="ph-bold ph-plus"></i> Add 1</button>
+                 </div>
+              `).join("");
+           }
 
-      host.querySelector("#admin-close-table").addEventListener("click", () => {
-         openAppModal({
-            title: `Close Table ${table.table_no}?`,
-            subtitle: "This marks the session as paid and frees the table for the next customer.",
-            body: `<div class="danger-confirm"><div class="danger-confirm-icon" style="background: var(--success-soft); color: var(--success);"><i class="ph-bold ph-check-circle"></i></div><h3>Payment Received?</h3><p>Ensure the customer has paid ${money(activeOrder.grand_total, settings.currency_symbol)} before closing.</p></div>`,
-            actions: [
-              { label: "Cancel", className: "btn-quiet", onClick: (ctx) => ctx.close() },
-              { label: "Yes, Close Table", className: "btn-primary", onClick: async (ctx) => {
-                  ctx.button.disabled = true;
-                  try {
-                    const { error } = await supabase.rpc("complete_session_payment", { p_session_id: session.id, p_payment_method: "cash" });
-                    if (error) throw error;
-                    showToast("Table Closed", `Table ${table.table_no} is now available.`);
-                    ctx.close();
-                    modal.close();
-                    reload();
-                  } catch(err) {
-                    ctx.button.disabled = false;
+           host.innerHTML = `
+             <div class="admin-add-item-list" style="text-align: left;">
+                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 16px;">
+                   <button class="icon-btn icon-btn-light" id="back-to-manager"><i class="ph-bold ph-arrow-left"></i></button>
+                   <h3 style="margin: 0; font-size: 16px;">Add Items to Table ${escapeHtml(table.table_no)}</h3>
+                </div>
+                <div class="search-input-wrap" style="margin-bottom: 16px;">
+                  <i class="ph-bold ph-magnifying-glass"></i>
+                  <input type="text" id="admin-item-search" placeholder="Search menu..." style="width:100%; border:none; background:transparent; outline:none; font-size: 15px; font-weight:700;">
+                </div>
+                <div id="admin-item-grid" style="max-height: 48vh; overflow-y: auto; padding-right: 8px;">
+                  ${renderAdminItemList(allActiveProducts)}
+                </div>
+             </div>
+           `;
+           
+           host.querySelector("#back-to-manager").addEventListener("click", renderManager);
+           
+           host.querySelector("#admin-item-search").addEventListener("input", (e) => {
+              const q = e.target.value.toLowerCase();
+              const filtered = allActiveProducts.filter(p => p.name.toLowerCase().includes(q));
+              host.querySelector("#admin-item-grid").innerHTML = renderAdminItemList(filtered);
+           });
+
+           host.querySelectorAll(".admin-quick-add-btn").forEach(btn => {
+              btn.addEventListener("click", async () => {
+                 btn.disabled = true;
+                 btn.innerHTML = `<i class="ph ph-spinner-gap ph-spin"></i>`;
+                 try {
+                    await supabase.rpc('append_pos_order', { 
+                        p_order_id: latestOrder.id, 
+                        p_items: [{ id: btn.dataset.quickAdd, name: btn.dataset.name, price: btn.dataset.price, quantity: 1 }] 
+                    });
+                    showToast("Item Added", `${btn.dataset.name} sent to Table ${table.table_no}`);
+                    renderManager(); // Refresh Admin drawer instantly
+                 } catch (err) {
                     showToast("Error", err.message, "error");
-                  }
-              }}
-            ]
-         });
-      });
+                    btn.disabled = false;
+                    btn.innerHTML = `<i class="ph-bold ph-plus"></i> Add 1`;
+                 }
+              });
+           });
+        });
 
-    } catch (err) {
-      host.innerHTML = `<div class="empty-state"><i class="ph ph-warning-circle"></i><strong>Error loading table</strong><span>${escapeHtml(err.message)}</span></div>`;
+        // VIEW FULL BILL LOGIC
+        host.querySelector("#admin-view-bill").addEventListener("click", () => {
+           showAdminReceiptPreview({
+             ...latestOrder, 
+             order_items: displayItems.map(i => ({ name_snapshot: i.name, unit_price: i.price, quantity: i.quantity })),
+             subtotal, cgst, sgst, rounding, grand_total: grandTotal
+           });
+        });
+
+        // CLOSE TABLE LOGIC
+        host.querySelector("#admin-close-table").addEventListener("click", () => {
+           openAppModal({
+              title: `Close Table ${table.table_no}?`,
+              subtitle: "This marks the session as paid and frees the table for the next customer.",
+              body: `<div class="danger-confirm"><div class="danger-confirm-icon" style="background: var(--success-soft); color: var(--success);"><i class="ph-bold ph-check-circle"></i></div><h3>Payment Received?</h3><p>Ensure the customer has paid ${money(grandTotal, settings.currency_symbol)} before closing.</p></div>`,
+              actions: [
+                { label: "Cancel", className: "btn-quiet", onClick: (ctx) => ctx.close() },
+                { label: "Yes, Close Table", className: "btn-primary", onClick: async (ctx) => {
+                    ctx.button.disabled = true;
+                    try {
+                      const { error } = await supabase.rpc("complete_session_payment", { p_session_id: session.id, p_payment_method: "cash" });
+                      if (error) throw error;
+                      showToast("Table Closed", `Table ${table.table_no} is now available.`);
+                      ctx.close();
+                      modal.close();
+                      reload();
+                    } catch(err) {
+                      ctx.button.disabled = false;
+                      showToast("Error", err.message, "error");
+                    }
+                }}
+              ]
+           });
+        });
+
+      } catch (err) {
+        host.innerHTML = `<div class="empty-state"><i class="ph ph-warning-circle"></i><strong>Error loading table</strong><span>${escapeHtml(err.message)}</span></div>`;
+      }
     }
+    
+    renderManager();
   }
 
   function renderSettings() {
