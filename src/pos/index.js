@@ -793,14 +793,22 @@ export async function render({ mount }) {
     });
 
     if (settings.upi_id && globalThis.QRCode) {
-      const qr = modal.root.querySelector("#thermal-upi"); 
-      const url = new URL("upi://pay"); 
-      url.searchParams.set("pa", settings.upi_id); 
-      url.searchParams.set("pn", settings.restaurant_name); 
-      url.searchParams.set("am", Number(order.grand_total).toFixed(2)); 
-      url.searchParams.set("cu", "INR"); 
-      url.searchParams.set("tn", `Order #${order.order_number}`);
-      new QRCode(qr, { text: url.toString(), width: 140, height: 140, correctLevel: QRCode.CorrectLevel.L });
+      // 50ms delay ensures the DOM is fully painted before drawing the QR Canvas
+      setTimeout(() => {
+        const qr = modal.root.querySelector("#thermal-upi");
+        if (qr) {
+          qr.innerHTML = ""; // Clears any old artifacts
+          
+          // Strictly encode the parameters to ensure 100% compatibility with all UPI apps
+          const pa = encodeURIComponent(settings.upi_id.trim());
+          const pn = encodeURIComponent(settings.restaurant_name.trim());
+          const am = Number(order.grand_total).toFixed(2);
+          const tn = encodeURIComponent(`Order #${order.order_number}`);
+          const upiString = `upi://pay?pa=${pa}&pn=${pn}&am=${am}&cu=INR&tn=${tn}`;
+          
+          new QRCode(qr, { text: upiString, width: 160, height: 160, correctLevel: QRCode.CorrectLevel.M });
+        }
+      }, 50);
     }
   }
 
@@ -927,15 +935,21 @@ export async function render({ mount }) {
     `;
 
     if (settings.upi_id && globalThis.QRCode) {
-      const qr = host.querySelector("#thermal-upi"); 
-      const url = new URL("upi://pay"); 
-      url.searchParams.set("pa", settings.upi_id); 
-      url.searchParams.set("pn", settings.restaurant_name); 
-      url.searchParams.set("am", Number(order.grand_total).toFixed(2)); 
-      url.searchParams.set("cu", "INR"); 
-      url.searchParams.set("tn", `Order #${order.order_number}`);
-      new QRCode(qr, { text: url.toString(), width: 140, height: 140, correctLevel: QRCode.CorrectLevel.L });
-      await new Promise(requestAnimationFrame);
+      const qr = host.querySelector("#thermal-upi");
+      if (qr) {
+        qr.innerHTML = "";
+        
+        const pa = encodeURIComponent(settings.upi_id.trim());
+        const pn = encodeURIComponent(settings.restaurant_name.trim());
+        const am = Number(order.grand_total).toFixed(2);
+        const tn = encodeURIComponent(`Order #${order.order_number}`);
+        const upiString = `upi://pay?pa=${pa}&pn=${pn}&am=${am}&cu=INR&tn=${tn}`;
+        
+        new QRCode(qr, { text: upiString, width: 160, height: 160, correctLevel: QRCode.CorrectLevel.M });
+        
+        // 100ms pause guarantees the browser finishes generating the canvas before the print dialog locks the thread
+        await new Promise(r => setTimeout(r, 100)); 
+      }
     }
     window.print();
   }

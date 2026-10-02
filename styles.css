@@ -142,8 +142,8 @@ button,input,select,textarea{font:inherit}button{border:0}button:disabled{cursor
 .sticky-subcat-inner { min-height: 0; overflow: hidden; }
 
 @media (min-width: 720px) { 
-  .cuisine-hero-grid { grid-template-columns: repeat(4, minmax(0, 260px)); justify-content: center; gap: 20px; margin-top: 10px; } 
-  .cuisine-hero-card { aspect-ratio: 3/4; border-radius: 20px; } 
+  .cuisine-hero-grid { grid-template-columns: repeat(4, minmax(0, 210px)); justify-content: center; gap: 10px; margin-top: 10px; } 
+  .cuisine-hero-card { aspect-ratio: 2/3; border-radius: 20px; } 
   .cuisine-hero-overlay h3 { font-size: 1.35rem; }
   .sub-category-grid { grid-template-columns: repeat(auto-fill, minmax(90px, 1fr)); gap: 8px; } 
   .sub-category-tile { padding: 10px 6px; }
@@ -2045,4 +2045,25 @@ html, body {
   0% { transform: scale(1); }
   50% { transform: scale(1.08); }
   100% { transform: scale(1); }
+}
+
+/* --- Maximize Mobile Screen Space --- */
+@media (max-width: 720px) {
+  /* Push main content to the very edges */
+  .pos-content, .customer-stage, .admin-content {
+    padding-left: 8px !important;
+    padding-right: 8px !important;
+    width: 100% !important;
+  }
+  
+  /* Bring the cuisine cards closer together on mobile */
+  .cuisine-hero-grid {
+    gap: 8px !important;
+  }
+  
+  /* Align all headers with the new tight margins */
+  .pos-topbar, .admin-topbar, .customer-topbar {
+    padding-left: 8px !important;
+    padding-right: 8px !important;
+  }
 }

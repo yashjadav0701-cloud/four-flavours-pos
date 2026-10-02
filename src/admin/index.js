@@ -775,14 +775,20 @@ async function renderAdminWorkspace(mount) {
     });
 
     if (settings.upi_id && globalThis.QRCode) {
-      const qr = modal.root.querySelector("#admin-thermal-upi"); 
-      const url = new URL("upi://pay"); 
-      url.searchParams.set("pa", settings.upi_id); 
-      url.searchParams.set("pn", settings.restaurant_name); 
-      url.searchParams.set("am", Number(order.grand_total).toFixed(2)); 
-      url.searchParams.set("cu", "INR"); 
-      url.searchParams.set("tn", `Order #${order.order_number}`);
-      new QRCode(qr, { text: url.toString(), width: 140, height: 140, correctLevel: QRCode.CorrectLevel.L });
+      setTimeout(() => {
+        const qr = modal.root.querySelector("#admin-thermal-upi");
+        if (qr) {
+          qr.innerHTML = "";
+          
+          const pa = encodeURIComponent(settings.upi_id.trim());
+          const pn = encodeURIComponent(settings.restaurant_name.trim());
+          const am = Number(order.grand_total).toFixed(2);
+          const tn = encodeURIComponent(`Order #${order.order_number}`);
+          const upiString = `upi://pay?pa=${pa}&pn=${pn}&am=${am}&cu=INR&tn=${tn}`;
+          
+          new QRCode(qr, { text: upiString, width: 160, height: 160, correctLevel: QRCode.CorrectLevel.M });
+        }
+      }, 50);
     }
   }
 
@@ -1192,19 +1198,46 @@ async function renderAdminWorkspace(mount) {
           icon: "ph-download-simple", 
           className: "btn-quiet", 
           onClick: () => { 
-            const canvas = modal.root.querySelector("#table-qr canvas");
-            const img = modal.root.querySelector("#table-qr img");
-            const source = canvas ? canvas.toDataURL("image/png") : (img ? img.src : null);
+            showToast("Generating...", "Preparing high-res QR code.");
             
-            if(source) {
-              const link = document.createElement("a");
-              link.download = `Table-${table.table_no}-QR.png`;
-              link.href = source;
-              link.click();
-              showToast("Downloaded", `Table ${table.table_no} QR code saved.`);
-            } else {
-              showToast("Error", "QR Code not ready yet.", "error");
-            }
+            // Create a temporary, ultra-high-res QR code just for downloading
+            const tempDiv = document.createElement("div");
+            new QRCode(tempDiv, { 
+              text: url, 
+              width: 1024, 
+              height: 1024, 
+              correctLevel: QRCode.CorrectLevel.M 
+            });
+            
+            setTimeout(() => {
+              const qrCanvas = tempDiv.querySelector("canvas");
+              if (qrCanvas) {
+                const padding = 120; // Creates a massive, clean margin for printing
+                const targetSize = qrCanvas.width + (padding * 2);
+                
+                const exportCanvas = document.createElement("canvas");
+                exportCanvas.width = targetSize;
+                exportCanvas.height = targetSize;
+                const ctx = exportCanvas.getContext("2d");
+                
+                // Fill pure white background (Required for JPGs)
+                ctx.fillStyle = "#ffffff";
+                ctx.fillRect(0, 0, targetSize, targetSize);
+                
+                // Draw the crisp 1024x1024 QR code in the dead center
+                ctx.drawImage(qrCanvas, padding, padding);
+                
+                // Export as Max Quality JPG
+                const link = document.createElement("a");
+                link.download = `Table-${table.table_no}-QR.jpg`;
+                link.href = exportCanvas.toDataURL("image/jpeg", 1.0);
+                link.click();
+                
+                showToast("Downloaded", `Table ${table.table_no} high-res JPG saved.`);
+              } else {
+                showToast("Error", "Could not generate QR Code.", "error");
+              }
+            }, 100);
           } 
         },
         { 
