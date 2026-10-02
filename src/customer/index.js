@@ -49,15 +49,16 @@ export async function render({ mount, route }) {
 
   mount.innerHTML = `
     <main class="customer-page">
-      <header class="customer-topbar">
-        <div class="customer-top-side"><span class="table-pill"><i class="ph ph-table"></i>Table ${escapeHtml(table.table_no)}</span></div>
-        <div class="customer-brand-center customer-main-logo">
-          <img
-            src="${versionedAsset("assets/images/website_logo.png")}"
-            alt="Four Flavours"
-          />
+      <header class="app-topbar customer-topbar">
+        <div class="topbar-side topbar-left customer-top-side">
+          <span class="table-pill"><i class="ph-bold ph-armchair"></i> Table ${escapeHtml(table.table_no)}</span>
         </div>
-        <div class="customer-top-side customer-top-side-right"><span class="live-indicator"><span class="live-dot"></span>Live menu</span></div>
+        <div class="brand-center main-logo-only">
+          <img src="${versionedAsset("assets/images/website_logo.png")}" alt="Four Flavours" style="height: 40px; width: auto; object-fit: contain;" />
+        </div>
+        <div class="topbar-side topbar-right customer-top-side-right">
+          <button class="icon-btn icon-btn-dark" id="customer-search-toggle" title="Search Menu"><i class="ph-bold ph-magnifying-glass"></i></button>
+        </div>
       </header>
       <section id="customer-stage" class="customer-stage"></section>
     </main>`;

@@ -25,6 +25,8 @@ export async function render({ mount }) {
   const cuisines = cuisinesResult.data ?? [];
   const state = createPOSState({ settings });
   
+  window.__FOUR_FLAVOURS_POS_STATE__ = state; // Exposes state for Admin Routing
+  
   let activeCuisine = null;
   let activeSubCategory = "All";
   let searchTerm = "";
@@ -66,18 +68,26 @@ export async function render({ mount }) {
         </div>
       </header>
       
-      <div class="pos-search-overlay" id="pos-search-overlay">
-        <i class="ph ph-magnifying-glass"></i>
-        <input id="pos-search" class="search-input" type="search" placeholder="Search dishes..." autocomplete="off">
+      <div class="pos-search-backdrop" id="pos-search-backdrop">
+        <div class="pos-search-panel">
+          <div class="search-bar-row">
+            <div class="search-input-wrap">
+              <i class="ph-bold ph-magnifying-glass"></i>
+              <input id="pos-search" class="search-input" type="text" placeholder="Search dishes..." autocomplete="off">
+              <button id="pos-search-clear" class="icon-btn is-hidden"><i class="ph-bold ph-x"></i></button>
+            </div>
+            <button id="pos-search-cancel" class="btn-quiet">Cancel</button>
+          </div>
+          <div class="search-suggestions" id="search-suggestions"></div>
+        </div>
       </div>
 
       <main class="pos-content">
         <section class="pos-toolbar-row">
           <button class="pos-toolbar-pill active" data-order-type="dine_in"><i class="ph-bold ph-armchair"></i><span>Dine-in</span></button>
           <button class="pos-toolbar-pill" data-order-type="takeaway"><i class="ph-bold ph-shopping-bag"></i><span>Takeaway</span></button>
-          <div class="pos-toolbar-pill" id="pos-table-wrap">
+          <div class="pos-toolbar-pill" id="pos-table-wrap" style="cursor: pointer;" title="Select Table">
             <span class="selected-text" id="pos-table-display"><i class="ph-bold ph-armchair"></i><span>Table</span><i class="ph ph-caret-down"></i></span>
-            <select id="pos-table"><option value="">Select Table</option>${tables.map(t => `<option value="${t.id}">Table ${escapeHtml(t.table_no)}</option>`).join("")}</select>
           </div>
         </section>
         <div id="pos-dynamic-area"></div>
@@ -96,37 +106,147 @@ export async function render({ mount }) {
   drawerCleanup = mountNavigation({ active: "pos" });
   mount.querySelector("#pos-menu").addEventListener("click", () => window.__FOUR_FLAVOURS_NAV__?.open());
   
+  const searchBackdrop = mount.querySelector("#pos-search-backdrop");
   const searchInput = mount.querySelector("#pos-search");
-  const searchOverlay = mount.querySelector("#pos-search-overlay");
+  const searchClear = mount.querySelector("#pos-search-clear");
+  const searchSuggestions = mount.querySelector("#search-suggestions");
   
-  mount.querySelector("#pos-search-toggle").addEventListener("click", (e) => {
-    e.stopPropagation();
-    searchOverlay.classList.toggle("active");
-    if (searchOverlay.classList.contains("active")) searchInput.focus();
+  // Load recents from device storage
+  let recentSearches = JSON.parse(localStorage.getItem("fourflavours_recent_searches") || "[]");
+
+  mount.querySelector("#pos-search-toggle").addEventListener("click", () => {
+    searchBackdrop.classList.add("active");
+    searchInput.focus();
+    renderSearchSuggestions();
   });
 
-  const handleOutsideClick = (e) => {
-    if (searchOverlay && !searchOverlay.contains(e.target) && !e.target.closest("#pos-search-toggle")) {
-      searchOverlay.classList.remove("active");
-    }
-  };
-  document.addEventListener("click", handleOutsideClick);
+  mount.querySelector("#pos-search-cancel").addEventListener("click", () => {
+    searchBackdrop.classList.remove("active");
+    searchInput.value = "";
+    searchClear.classList.add("is-hidden");
+    searchTerm = "";
+    renderProducts();
+  });
 
-  searchInput.addEventListener("input", event => { searchTerm = event.target.value.trim().toLowerCase(); renderProducts(); });
+  searchClear.addEventListener("click", () => {
+    searchInput.value = "";
+    searchInput.focus();
+    searchClear.classList.add("is-hidden");
+    renderSearchSuggestions();
+  });
+
+  searchInput.addEventListener("input", (e) => {
+    const val = e.target.value.trim();
+    searchClear.classList.toggle("is-hidden", val === "");
+    renderSearchSuggestions(val);
+  });
+
+  searchInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && searchInput.value.trim()) {
+      executeSearch(searchInput.value.trim());
+    }
+  });
+
+  function executeSearch(query) {
+    if (!query) return;
+    // Save to recents (max 5)
+    recentSearches = [query, ...recentSearches.filter(s => s.toLowerCase() !== query.toLowerCase())].slice(0, 5);
+    localStorage.setItem("fourflavours_recent_searches", JSON.stringify(recentSearches));
+    
+    searchTerm = query.toLowerCase();
+    searchBackdrop.classList.remove("active");
+    renderProducts();
+  }
+
+  function renderSearchSuggestions(query = "") {
+    let html = "";
+    
+    if (query) {
+      // Live Filtering Results
+      const hits = products.filter(p => p.name.toLowerCase().includes(query.toLowerCase())).slice(0, 6);
+      if (hits.length) {
+        html += `<div class="search-group-title">Matches</div><div class="search-list">`;
+        html += hits.map(p => `<button class="search-list-item" data-search-trigger="${escapeHtml(p.name)}"><i class="ph ph-magnifying-glass"></i><span>${escapeHtml(p.name)}</span></button>`).join("");
+        html += `</div>`;
+      } else {
+        html = `<div class="empty-state compact"><i class="ph ph-magnifying-glass"></i><strong>No exact matches</strong><span>Press enter to search anyway.</span></div>`;
+      }
+    } else {
+      // 1. Show Recents
+      if (recentSearches.length > 0) {
+        html += `<div class="search-group-title">Recent Searches</div><div class="search-tags">`;
+        html += recentSearches.map(s => `<button class="search-tag" data-search-trigger="${escapeHtml(s)}"><i class="ph ph-clock-counter-clockwise"></i>${escapeHtml(s)}</button>`).join("");
+        html += `</div>`;
+      }
+
+      // 2. Show Dynamic Recommendations (Randomized per load for variety)
+      const shuffled = [...products].sort(() => 0.5 - Math.random()).slice(0, 4);
+      if (shuffled.length > 0) {
+        html += `<div class="search-group-title">Perfect Meals Recommended For You</div><div class="search-list">`;
+        html += shuffled.map(p => `<button class="search-list-item" data-search-trigger="${escapeHtml(p.name)}"><i class="ph ph-star"></i><span>${escapeHtml(p.name)}</span><small>${money(p.price, settings.currency_symbol)}</small></button>`).join("");
+        html += `</div>`;
+      }
+    }
+
+    searchSuggestions.innerHTML = html;
+    searchSuggestions.querySelectorAll("[data-search-trigger]").forEach(btn => {
+      btn.addEventListener("click", () => {
+        searchInput.value = btn.dataset.searchTrigger;
+        executeSearch(btn.dataset.searchTrigger);
+      });
+    });
+  }
   
   const tableDisplay = mount.querySelector("#pos-table-display span");
-  mount.querySelector("#pos-table").addEventListener("change", event => { 
-    const table = tables.find(t => t.id === event.target.value) ?? null; 
-    state.setTable(table); 
-    tableDisplay.textContent = table ? `Table ${table.table_no}` : "Table";
+  const tableWrapBtn = mount.querySelector("#pos-table-wrap");
+  let autoOpenReview = false;
+
+  tableWrapBtn.addEventListener("click", (e) => {
+    if (state.getState().orderType === "takeaway") return;
+    
+    // Detect if this click came programmatically from the "Next" button smart redirect
+    autoOpenReview = e.isTrusted === false || window._autoReviewPending;
+    window._autoReviewPending = false;
+    
+    const modal = openAppModal({
+      title: "Select Table",
+      subtitle: "Assign a table for this dine-in session.",
+      body: `<div class="table-selection-list" style="max-height: 50vh; overflow-y: auto; margin: -10px -24px;">
+        ${tables.length ? tables.map(t => `
+          <button class="btn btn-quiet table-select-btn" data-table-id="${t.id}" style="width: 100%; border-radius: 0; justify-content: flex-start; padding: 18px 24px; font-size: 16px; border-bottom: 1px solid var(--line);">
+            <i class="ph-bold ph-armchair" style="color: var(--forest-600); margin-right: 14px; font-size: 20px;"></i>
+            <strong style="color: var(--forest-950);">Table ${escapeHtml(t.table_no)}</strong>
+            <span style="margin-left: auto; font-size: 13px; font-weight: 700; color: var(--muted);">${t.capacity} seats</span>
+          </button>
+        `).join("") : `<div class="empty-state"><i class="ph-bold ph-armchair"></i><strong>No active tables</strong></div>`}
+      </div>`,
+      actions: [
+        { label: "Cancel", icon: "ph-x", className: "btn-quiet", onClick: (ctx) => { autoOpenReview = false; ctx.close(); } }
+      ]
+    });
+
+    modal.root.querySelectorAll(".table-select-btn").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const table = tables.find(t => t.id === btn.dataset.tableId) ?? null;
+        state.setTable(table);
+        tableDisplay.textContent = table ? `Table ${table.table_no}` : "Table";
+        modal.close();
+        
+        // Smart Redirect: If triggered by 'Next' and cart has items, seamlessly transition to Review
+        if (autoOpenReview && state.getState().items.length > 0) {
+          autoOpenReview = false;
+          openReview();
+        }
+      });
+    });
   });
   
   mount.querySelectorAll("[data-order-type]").forEach(button => button.addEventListener("click", () => { 
     state.setOrderType(button.dataset.orderType); 
     mount.querySelectorAll("[data-order-type]").forEach(el => el.classList.toggle("active", el === button)); 
-    mount.querySelector("#pos-table-wrap").classList.toggle("is-disabled", button.dataset.orderType === "takeaway"); 
+    tableWrapBtn.classList.toggle("is-disabled", button.dataset.orderType === "takeaway"); 
     if (button.dataset.orderType === "takeaway") {
-      mount.querySelector("#pos-table").value = "";
+      state.setTable(null);
       tableDisplay.textContent = "Table";
     }
   }));
@@ -421,7 +541,14 @@ export async function render({ mount }) {
   function openReview() {
     const current = state.getState();
     if (!state.canSubmit()) { 
-      showToast("Complete the order", current.orderType === "dine_in" && !current.tableId ? "Choose a table first." : "Add at least one dish.", "error"); 
+      // Smart Redirect: If it's dine-in and no table is selected, instantly pop open the table modal!
+      if (current.orderType === "dine_in" && !current.tableId) {
+        window._autoReviewPending = true; // Leaves a secure flag for the Table Modal to catch
+        mount.querySelector("#pos-table-wrap").click();
+        return;
+      }
+      // Otherwise, it means their cart is empty
+      showToast("Complete the order", "Add at least one dish.", "error"); 
       return; 
     }
     

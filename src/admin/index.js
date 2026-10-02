@@ -608,17 +608,14 @@ async function renderAdminWorkspace(mount) {
       }
 
       list.innerHTML = orders.map(o => `
-        <article class="admin-product-row">
-          <div class="admin-product-main">
-            <div class="admin-product-title">
-              <div><strong>Order #${escapeHtml(o.order_number)}</strong><span>${new Date(o.created_at).toLocaleString('en-IN', {day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit'})}</span></div>
-              <strong>${money(o.grand_total, settings.currency_symbol)}</strong>
-            </div>
-            <p>${o.order_type === 'dine_in' ? `Dine-in · Table ${tables.find(t => t.id === o.table_id)?.table_no || 'Unknown'}` : 'Takeaway'} · ${o.order_items.length} items</p>
-          </div>
-          <div class="admin-product-actions">
-            <button class="icon-btn icon-btn-light" data-view-order="${o.id}" title="View Receipt"><i class="ph ph-printer"></i></button>
-            <button class="icon-btn icon-btn-danger" data-delete-order="${o.id}" title="Delete Order"><i class="ph ph-trash"></i></button>
+        <article class="admin-order-data-row">
+          <div class="order-cell-id">Order #${escapeHtml(o.order_number)}</div>
+          <div class="order-cell-date">${new Date(o.created_at).toLocaleString('en-IN', {day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit'})}</div>
+          <div class="order-cell-type">${o.order_type === 'dine_in' ? `Dine-in · Table ${tables.find(t => t.id === o.table_id)?.table_no || 'Unknown'}` : 'Takeaway'} · ${o.order_items.length} ${o.order_items.length === 1 ? 'item' : 'items'}</div>
+          <div class="order-cell-price">${money(o.grand_total, settings.currency_symbol)}</div>
+          <div class="order-cell-actions">
+            <button class="icon-btn icon-btn-light" data-view-order="${o.id}" title="View Receipt"><i class="ph-bold ph-printer"></i></button>
+            <button class="icon-btn icon-btn-danger" data-delete-order="${o.id}" title="Delete Order"><i class="ph-bold ph-trash"></i></button>
           </div>
         </article>
       `).join("");
@@ -854,9 +851,32 @@ async function renderAdminWorkspace(mount) {
       <section class="metric-grid">${metricCard("ph-fork-knife", activeProducts, "Active dishes")}${metricCard("ph-armchair", activeTables, "Active tables")}${metricCard("ph-bell", sessions.length, "Open sessions")}${metricCard("ph-receipt", billRequests, "Bill requests")}</section>
       <section class="admin-grid-two">
         <article class="admin-panel"><div class="panel-head"><div><span class="eyebrow">Quick actions</span><h2>Run the floor</h2></div></div><div class="quick-action-grid"><button class="quick-action" data-go="tables"><i class="ph ph-armchair"></i><span><strong>Manage tables</strong><small>Add, edit, delete and print QR codes.</small></span><i class="ph ph-arrow-right"></i></button><button class="quick-action" data-go="menu"><i class="ph ph-fork-knife"></i><span><strong>Manage menu</strong><small>Names, descriptions, prices and visibility.</small></span><i class="ph ph-arrow-right"></i></button><button class="quick-action" data-go="settings"><i class="ph ph-gear"></i><span><strong>Tax & UPI</strong><small>Keep server-side billing settings current.</small></span><i class="ph ph-arrow-right"></i></button></div></article>
-        <article class="admin-panel"><div class="panel-head"><div><span class="eyebrow">Dining sessions</span><h2>Open tables</h2></div><span class="soft-badge">${sessions.length} active</span></div><div class="session-mini-scroll">${sessions.length ? sessions.map(s => `<div class="admin-mini-row"><div class="mini-row-icon"><i class="ph ph-armchair"></i></div><div><strong>Table ${escapeHtml(tables.find(t => t.id === s.table_id)?.table_no ?? "—")}</strong><span>${s.status === "bill_requested" ? "Bill requested" : s.status === "bill_ready" ? "Bill ready" : "Dining session open"}</span></div><span class="session-status ${s.status}">${s.status === "bill_requested" ? "Action" : s.status === "bill_ready" ? "Ready" : "Open"}</span></div>`).join("") : `<div class="empty-state compact"><i class="ph ph-circle-wavy-check"></i><strong>No open table sessions</strong><span>The floor is currently clear.</span></div>`}</div></article>
+        <article class="admin-panel"><div class="panel-head"><div><span class="eyebrow">Dining sessions</span><h2>Open tables</h2></div><span class="soft-badge">${sessions.length} active</span></div><div class="session-mini-scroll" id="overview-session-list">
+          ${sessions.length ? sessions.map(s => `
+            <div class="admin-mini-row" style="padding: 16px 12px; border: 1px solid var(--line); border-radius: 14px; margin-bottom: 8px; background: var(--paper);">
+              <div class="mini-row-icon"><i class="ph-bold ph-armchair"></i></div>
+              <div style="flex: 1; margin-left: 14px;">
+                <strong style="font-size: 15px;">Table ${escapeHtml(tables.find(t => t.id === s.table_id)?.table_no ?? "—")}</strong>
+                <span style="font-size: 12px; color: var(--muted);">${s.status === "bill_requested" ? "Bill requested" : s.status === "bill_ready" ? "Bill ready" : "Dining session open"}</span>
+              </div>
+              <div style="display: flex; align-items: center; gap: 14px;">
+                <strong style="color: var(--success); font-size: 14px; text-transform: uppercase;">Open</strong>
+                <button class="btn btn-primary btn-small" data-manage-session="${s.id}">Manage</button>
+              </div>
+            </div>
+          `).join("") : `<div class="empty-state compact"><i class="ph ph-circle-wavy-check"></i><strong>No open table sessions</strong><span>The floor is currently clear.</span></div>`}
+        </div></article>
       </section>`;
+    
     area.querySelectorAll("[data-go]").forEach(b => b.addEventListener("click", () => { section = b.dataset.go; mount.querySelectorAll("[data-section]").forEach(el => el.classList.toggle("active", el.dataset.section === section)); renderSection(); }));
+    
+    area.querySelector("#overview-session-list")?.addEventListener("click", e => {
+      const row = e.target.closest("[data-manage-session]");
+      if (!row) return;
+      const session = sessions.find(x => x.id === row.dataset.manageSession);
+      const table = tables.find(x => x.id === session?.table_id);
+      if (table && session) openAdminTableManager(table, session);
+    });
   }
 
   function renderMenu() {
@@ -877,22 +897,228 @@ async function renderAdminWorkspace(mount) {
 
   function renderTables() {
     area.innerHTML = `
-      <section class="section-title-row"><div><span class="eyebrow">Floor layout</span><h1>Tables without clutter.</h1><p>Manage table numbers, capacity, visibility and QR codes with custom in-site forms.</p></div><button class="btn btn-primary" id="add-table"><i class="ph-bold ph-plus"></i>Add table</button></section>
-      <section class="admin-panel"><div class="panel-toolbar"><span class="soft-badge">${tables.length} tables</span><span class="panel-help">
-  <i class="ph ph-qr-code"></i>
-  Production QR · tff.vercel.app · table ID
-</span></div><div class="admin-table-scroll" id="table-list"></div></section>`;
+      <section class="section-title-row"><div><span class="eyebrow">Floor layout</span><h1>Live Table Management.</h1><p>Monitor occupied tables, force-close abandoned sessions, and manage your floor plan.</p></div><button class="btn btn-primary" id="add-table"><i class="ph-bold ph-plus"></i>Add table</button></section>
+      <section class="admin-panel"><div class="panel-toolbar"><span class="soft-badge">${tables.length} tables</span><span class="panel-help"><i class="ph ph-qr-code"></i> Production QR Available</span></div><div class="admin-table-scroll" id="table-list"></div></section>`;
+    
     const list = area.querySelector("#table-list");
-    list.innerHTML = tables.length ? tables.map(t => `<article class="table-admin-card ${t.is_active ? "" : "inactive"}"><div class="table-badge"><i class="ph-bold ph-armchair"></i><strong>${escapeHtml(t.table_no)}</strong></div><div class="table-card-main"><div><span class="eyebrow">Table ${escapeHtml(t.table_no)}</span><strong>${Number(t.capacity)} ${Number(t.capacity) === 1 ? "seat" : "seats"}</strong></div><span class="table-state ${t.is_active ? "active" : "inactive"}"><span></span>${t.is_active ? "Active" : "Hidden"}</span></div><div class="table-card-actions">${t.is_active ? `<button class="icon-btn icon-btn-light" data-qr="${t.id}" title="Table QR" aria-label="Table QR"><i class="ph-bold ph-qr-code"></i></button>` : ""}<button class="icon-btn icon-btn-light" data-edit-table="${t.id}" title="Edit table" aria-label="Edit table"><i class="ph-bold ph-pencil-simple"></i></button><button class="icon-btn icon-btn-danger" data-delete-table="${t.id}" title="Delete table" aria-label="Delete table"><i class="ph-bold ph-trash"></i></button></div></article>`).join("") : `<div class="empty-state"><i class="ph-bold ph-armchair"></i><strong>No tables yet</strong><span>Create the first table to generate a QR.</span></div>`;
+    const activeSessions = sessions.filter(s => s.status !== "closed");
+
+    list.innerHTML = tables.length ? tables.map(t => {
+      const openSession = activeSessions.find(s => s.table_id === t.id);
+      
+      return `
+        <article class="table-admin-card ${openSession ? 'occupied-card' : ''} ${t.is_active ? "" : "inactive"}">
+          <div class="table-badge">
+            <i class="ph-bold ph-armchair"></i>
+            <strong>${escapeHtml(t.table_no)}</strong>
+          </div>
+          <div class="table-card-main">
+            <div>
+              <span class="eyebrow">Capacity: ${Number(t.capacity)}</span>
+              ${openSession 
+                ? `<strong style="color: var(--danger);">Occupied</strong>`
+                : `<strong>Empty</strong>`
+              }
+            </div>
+            ${openSession
+              ? `<span class="table-state active" style="color: var(--danger);"><span></span>Session Active</span>`
+              : `<span class="table-state ${t.is_active ? "active" : "inactive"}"><span></span>${t.is_active ? "Ready" : "Hidden"}</span>`
+            }
+          </div>
+          <div class="table-card-actions">
+            ${openSession
+              ? `<button class="btn btn-primary btn-small" data-manage-table="${t.id}"><i class="ph-bold ph-list-magnifying-glass"></i> Manage</button>`
+              : `
+                ${t.is_active ? `<button class="icon-btn icon-btn-light" data-qr="${t.id}" title="Table QR"><i class="ph-bold ph-qr-code"></i></button>` : ""}
+                <button class="icon-btn icon-btn-light" data-edit-table="${t.id}" title="Edit table"><i class="ph-bold ph-pencil-simple"></i></button>
+                <button class="icon-btn icon-btn-danger" data-delete-table="${t.id}" title="Delete table"><i class="ph-bold ph-trash"></i></button>
+              `
+            }
+          </div>
+        </article>
+      `
+    }).join("") : `<div class="empty-state"><i class="ph-bold ph-armchair"></i><strong>No tables yet</strong><span>Create the first table to generate a QR.</span></div>`;
+
     area.querySelector("#add-table").addEventListener("click", () => openTableEditor());
+    
     list.addEventListener("click", e => {
       const edit = e.target.closest("[data-edit-table]");
       const del = e.target.closest("[data-delete-table]");
       const qr = e.target.closest("[data-qr]");
+      const manageTbl = e.target.closest("[data-manage-table]");
+      
       if (edit) { const t = tables.find(x => x.id === edit.dataset.editTable); if (t) openTableEditor(t); }
       if (del) { const t = tables.find(x => x.id === del.dataset.deleteTable); if (t) openTableDelete(t); }
       if (qr) { const t = tables.find(x => x.id === qr.dataset.qr); if (t) openTableQR(t); }
+      if (manageTbl) { 
+        const t = tables.find(x => x.id === manageTbl.dataset.manageTable);
+        const s = activeSessions.find(x => x.table_id === t.id);
+        if (t && s) openAdminTableManager(t, s); 
+      }
     });
+  }
+
+  async function openAdminTableManager(table, session) {
+    const modal = openAppModal({
+      title: `Table ${table.table_no} Management`,
+      subtitle: "Review the active order, add items, or close the table.",
+      body: `<div id="admin-table-manager-host"><div class="empty-state"><i class="ph ph-spinner-gap ph-spin"></i><strong>Loading table data...</strong></div></div>`,
+      actions: [
+        { label: "Close Window", icon: "ph-x", className: "btn-quiet", onClick: ({ close }) => close() }
+      ]
+    });
+
+    const host = modal.root.querySelector("#admin-table-manager-host");
+    
+    try {
+      const { data: orders, error } = await supabase.from("orders").select("*, order_items(*)").eq("session_id", session.id).neq("status", "cancelled").order("created_at", { ascending: false }).limit(1);
+      if (error) throw error;
+      const activeOrder = orders?.[0];
+
+      // If session is open but no food ordered yet
+      if (!activeOrder) {
+        host.innerHTML = `<div class="empty-state"><i class="ph ph-warning-circle"></i><strong>No active order found</strong><span>The table session was opened, but no items were sent to the kitchen.</span></div><div style="display:flex; gap: 10px; justify-content:center;"><button class="btn btn-primary" id="admin-add-items"><i class="ph-bold ph-plus"></i> Add Items</button> <button class="btn btn-danger" id="force-close-empty"><i class="ph-bold ph-power"></i> Force Close Table</button></div>`;
+        
+        host.querySelector("#force-close-empty").addEventListener("click", async () => {
+           await supabase.from("dining_sessions").update({ status: 'closed' }).eq("id", session.id);
+           modal.close();
+           reload();
+        });
+        
+        host.querySelector("#admin-add-items").addEventListener("click", () => {
+           modal.close();
+           window.__FOUR_FLAVOURS_POS_STATE__?.setOrderType('dine_in');
+           window.__FOUR_FLAVOURS_POS_STATE__?.setTable(table);
+           document.querySelector('[data-nav="pos"]')?.click();
+        });
+        return;
+      }
+
+      host.innerHTML = `
+        <div class="active-dining-dashboard" style="text-align: left;">
+          <div class="dining-status-banner">
+            <i class="ph-bold ph-receipt"></i>
+            <div>
+              <strong>Order #${activeOrder.order_number} is open</strong>
+              <span>Grand Total: ${money(activeOrder.grand_total, settings.currency_symbol)}</span>
+            </div>
+          </div>
+          <h3 class="dining-section-title">Customer's Order Items</h3>
+          <div class="dining-items-list" style="max-height: 40vh; overflow-y: auto; margin-bottom: 16px;">
+            ${activeOrder.order_items.map(i => `
+              <div class="dining-item-row" style="padding-right: 12px;">
+                <div class="dining-item-info">
+                  <strong>${escapeHtml(i.name_snapshot)} <span class="qty-badge">x${i.quantity}</span></strong>
+                  <span>${money(i.unit_price, settings.currency_symbol)}</span>
+                </div>
+                <strong>${money(Number(i.unit_price) * Number(i.quantity), settings.currency_symbol)}</strong>
+              </div>
+            `).join("")}
+          </div>
+          <div style="display: flex; gap: 8px; border-top: 1px solid var(--line); padding-top: 16px;">
+            <button class="btn btn-quiet" id="admin-add-items" style="flex: 1; padding: 0 4px; font-size: 12px;"><i class="ph-bold ph-plus"></i> Add Items</button>
+            <button class="btn btn-quiet" id="admin-view-bill" style="flex: 1; padding: 0 4px; font-size: 12px;"><i class="ph-bold ph-printer"></i> Bill</button>
+            <button class="btn btn-primary" id="admin-close-table" style="flex: 1.5; padding: 0 4px; font-size: 12px;"><i class="ph-bold ph-check-circle"></i> Close Table</button>
+          </div>
+        </div>
+      `;
+
+      // Render simple inline list for Admin to quick-add items
+      host.querySelector("#admin-add-items").addEventListener("click", () => {
+         const allActiveProducts = window.__FOUR_FLAVOURS_POS_STATE__ ? window.__FOUR_FLAVOURS_POS_STATE__.getState().settings.products : [];
+         
+         function renderAdminItemList(list) {
+            if (!list || !list.length) return `<div class="empty-state compact"><i class="ph ph-magnifying-glass"></i><strong>No dishes found</strong></div>`;
+            return list.map(p => `
+               <div style="display:flex; justify-content:space-between; align-items:center; padding: 14px 0; border-bottom: 1px solid var(--cream-200);">
+                  <div style="display:flex; flex-direction:column; gap:4px;">
+                     <strong style="font-size: 14px; color: var(--forest-950);">${escapeHtml(p.name)}</strong>
+                     <span style="font-size:12.5px; color:var(--muted);">${money(p.price, settings.currency_symbol)}</span>
+                  </div>
+                  <button class="btn btn-quiet btn-small admin-quick-add-btn" data-quick-add="${p.id}" data-name="${escapeHtml(p.name)}" data-price="${p.price}"><i class="ph-bold ph-plus"></i> Add 1</button>
+               </div>
+            `).join("");
+         }
+
+         host.innerHTML = `
+           <div class="admin-add-item-list" style="text-align: left;">
+              <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 16px;">
+                 <button class="icon-btn icon-btn-light" id="back-to-manager"><i class="ph-bold ph-arrow-left"></i></button>
+                 <h3 style="margin: 0; font-size: 16px;">Add Items to Table ${escapeHtml(table.table_no)}</h3>
+              </div>
+              <div class="search-input-wrap" style="margin-bottom: 16px;">
+                <i class="ph-bold ph-magnifying-glass"></i>
+                <input type="text" id="admin-item-search" placeholder="Search menu..." style="width:100%; border:none; background:transparent; outline:none; font-size: 15px; font-weight:700;">
+              </div>
+              <div id="admin-item-grid" style="max-height: 48vh; overflow-y: auto; padding-right: 8px;">
+                ${renderAdminItemList(products.filter(p => p.is_active))}
+              </div>
+           </div>
+         `;
+         
+         host.querySelector("#back-to-manager").addEventListener("click", () => openAdminTableManager(table, session));
+         
+         host.querySelector("#admin-item-search").addEventListener("input", (e) => {
+            const q = e.target.value.toLowerCase();
+            const filtered = products.filter(p => p.is_active && p.name.toLowerCase().includes(q));
+            host.querySelector("#admin-item-grid").innerHTML = renderAdminItemList(filtered);
+         });
+
+         host.addEventListener("click", async (e) => {
+            const addBtn = e.target.closest(".admin-quick-add-btn");
+            if (addBtn) {
+               addBtn.disabled = true;
+               addBtn.innerHTML = `<i class="ph ph-spinner-gap ph-spin"></i>`;
+               try {
+                  // Instantly append to database. The customer's screen will realtime sync automatically!
+                  await supabase.rpc('append_pos_order', { 
+                      p_order_id: activeOrder.id, 
+                      p_items: [{ id: addBtn.dataset.quickAdd, name: addBtn.dataset.name, price: addBtn.dataset.price, quantity: 1 }] 
+                  });
+                  showToast("Item Added", `${addBtn.dataset.name} sent to Table ${table.table_no}`);
+                  // Refresh manager view instantly
+                  openAdminTableManager(table, session);
+               } catch (err) {
+                  showToast("Error", err.message, "error");
+                  addBtn.disabled = false;
+                  addBtn.innerHTML = `<i class="ph-bold ph-plus"></i> Add 1`;
+               }
+            }
+         });
+      });
+
+      host.querySelector("#admin-view-bill").addEventListener("click", () => {
+         showAdminReceiptPreview(activeOrder);
+      });
+
+      host.querySelector("#admin-close-table").addEventListener("click", () => {
+         openAppModal({
+            title: `Close Table ${table.table_no}?`,
+            subtitle: "This marks the session as paid and frees the table for the next customer.",
+            body: `<div class="danger-confirm"><div class="danger-confirm-icon" style="background: var(--success-soft); color: var(--success);"><i class="ph-bold ph-check-circle"></i></div><h3>Payment Received?</h3><p>Ensure the customer has paid ${money(activeOrder.grand_total, settings.currency_symbol)} before closing.</p></div>`,
+            actions: [
+              { label: "Cancel", className: "btn-quiet", onClick: (ctx) => ctx.close() },
+              { label: "Yes, Close Table", className: "btn-primary", onClick: async (ctx) => {
+                  ctx.button.disabled = true;
+                  try {
+                    const { error } = await supabase.rpc("complete_session_payment", { p_session_id: session.id, p_payment_method: "cash" });
+                    if (error) throw error;
+                    showToast("Table Closed", `Table ${table.table_no} is now available.`);
+                    ctx.close();
+                    modal.close();
+                    reload();
+                  } catch(err) {
+                    ctx.button.disabled = false;
+                    showToast("Error", err.message, "error");
+                  }
+              }}
+            ]
+         });
+      });
+
+    } catch (err) {
+      host.innerHTML = `<div class="empty-state"><i class="ph ph-warning-circle"></i><strong>Error loading table</strong><span>${escapeHtml(err.message)}</span></div>`;
+    }
   }
 
   function renderSettings() {
@@ -947,19 +1173,58 @@ async function renderAdminWorkspace(mount) {
     const url = getCustomerTableUrl(table.id);
     const modal = openAppModal({
       title: `Table ${escapeHtml(table.table_no)} QR`,
-      subtitle: "This QR always opens the live Four Flavours menu at tff.vercel.app.",
-      body: `<div class="qr-preview-panel"><div class="qr-preview" id="table-qr"></div><div class="qr-table-title">Table ${escapeHtml(table.table_no)}</div><div class="qr-url">${escapeHtml(url)}</div><div class="qr-safety-note">
-  <i class="ph ph-shield-check"></i>
-  <span>
-    Production QR · Opens only the Four Flavours customer menu for this table.
-  </span>
-</div></div>`,
+      subtitle: "This QR always opens the live Four Flavours menu at four-flavours.vercel.app.",
+      body: `<div class="qr-preview-panel">
+        <div class="qr-preview" id="table-qr" style="position:relative;">
+          <!-- QR Canvas generated here -->
+          <img src="${versionedAsset("assets/images/website_icon.png")}" style="position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); width:48px; height:48px; border-radius:10px; border:4px solid #fff; z-index:10; background:#fff;" alt="Logo">
+        </div>
+        <div class="qr-table-title">Table ${escapeHtml(table.table_no)}</div>
+        <div class="qr-url">${escapeHtml(url)}</div>
+        <div class="qr-safety-note"><i class="ph ph-shield-check"></i><span>Production QR · Opens only the Four Flavours customer menu for this table.</span></div>
+      </div>`,
       actions: [
         { label: "Close", icon: "ph-x", className: "btn-quiet", onClick: ({ close }) => close() },
-        { label: "Print QR", icon: "ph-printer", className: "btn-primary", onClick: ({ button }) => { button.disabled = true; const host = document.querySelector("#qr-print-host"); const qr = modal.root.querySelector("#table-qr"); host.innerHTML = `<section class="qr-print-sheet"><img src="${versionedAsset("assets/images/website_icon.png")}" alt=""><h1>Four Flavours</h1><h2>Table ${escapeHtml(table.table_no)}</h2><div class="qr-print-code">${qr.innerHTML}</div><p>Scan to view the menu & order</p></section>`; document.body.classList.add("print-qr"); window.print(); setTimeout(() => { document.body.classList.remove("print-qr"); host.innerHTML = ""; button.disabled = false; }, 800); } }
+        { label: "Download QR", icon: "ph-download-simple", className: "btn-primary", onClick: ({ button }) => { 
+            button.disabled = true; 
+            const qrCanvas = modal.root.querySelector("#table-qr canvas");
+            if (!qrCanvas) { button.disabled = false; return; }
+            
+            // Build a high-res merged canvas for download
+            const merged = document.createElement("canvas");
+            const size = 600; 
+            merged.width = size; 
+            merged.height = size;
+            const ctx = merged.getContext("2d");
+            
+            // Draw white background & QR
+            ctx.fillStyle = "#ffffff"; 
+            ctx.fillRect(0, 0, size, size);
+            ctx.drawImage(qrCanvas, 24, 24, size - 48, size - 48);
+            
+            // Draw Logo in center
+            const logo = new Image();
+            logo.crossOrigin = "Anonymous";
+            logo.src = versionedAsset("assets/images/website_icon.png");
+            logo.onload = () => {
+              const ls = size * 0.22; // Logo takes up 22% of QR
+              const center = (size - ls) / 2;
+              ctx.fillStyle = "#ffffff"; 
+              ctx.fillRect(center - 12, center - 12, ls + 24, ls + 24); // White protective border
+              ctx.drawImage(logo, center, center, ls, ls);
+              
+              // Trigger PNG Download
+              const a = document.createElement("a");
+              a.download = `FourFlavours_Table_${table.table_no}_QR.png`;
+              a.href = merged.toDataURL("image/png");
+              a.click();
+              button.disabled = false;
+            };
+        }}
       ]
     });
-    if (globalThis.QRCode) new QRCode(modal.root.querySelector("#table-qr"), { text: url, width: 220, height: 220, correctLevel: QRCode.CorrectLevel.M });
+    // Use Level.H (High Error Correction) so the center logo doesn't break the scan!
+    if (globalThis.QRCode) new QRCode(modal.root.querySelector("#table-qr"), { text: url, width: 220, height: 220, correctLevel: QRCode.CorrectLevel.H });
   }
 
   function openProductEditor(product = null) {
