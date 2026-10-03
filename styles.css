@@ -1428,73 +1428,80 @@ html, body {
 }
 
 /* =========================================
-   PREMIUM ADMIN NAVIGATION BAR (SNUG DOCK)
+   YOUTUBE-STYLE PREMIUM NAVIGATION BAR
    ========================================= */
 nav#admin-section-nav.admin-section-nav {
   position: fixed !important;
-  bottom: 8px !important; /* Tighter to the bottom edge */
-  left: 50% !important;
-  transform: translateX(-50%) !important;
-  width: min(calc(100% - 16px), 520px) !important; /* Reduces side gaps to just 8px on mobile */
-  height: 54px !important;
-  background: var(--sage-100) !important; 
-  border: 1px solid var(--sage-200) !important;
-  border-radius: 20px !important; 
-  padding: 0 10px !important;
+  bottom: 0 !important;
+  left: 0 !important;
+  width: 100% !important;
+  height: 58px !important; /* Slimmer, compact height */
+  background: rgba(252, 252, 249, 0.95) !important; /* Premium Creamy Glass */
+  backdrop-filter: blur(16px) !important;
+  -webkit-backdrop-filter: blur(16px) !important;
+  border-top: 1px solid rgba(0,0,0,0.06) !important;
+  border-radius: 0 !important;
+  padding: 0 8px env(safe-area-inset-bottom) 8px !important;
   display: flex !important;
   align-items: center !important;
-  justify-content: space-between !important; 
-  gap: 2px !important;
+  justify-content: space-around !important; 
   z-index: 9999 !important;
-  box-shadow: 0 10px 30px rgba(18, 34, 22, 0.15) !important; 
+  box-shadow: 0 -4px 24px rgba(18, 34, 22, 0.04) !important; 
 }
 
 nav#admin-section-nav.admin-section-nav button {
   display: flex !important;
+  flex-direction: column !important; /* Stack icon and text like YouTube */
   align-items: center !important;
   justify-content: center !important;
   background: transparent !important;
   border: none !important;
-  border-radius: 12px !important;
-  height: 42px !important; 
+  height: 100% !important; 
   flex: 1 !important; 
   padding: 0 !important; 
+  margin: 0 !important;
+  gap: 2px !important; /* Tighter gap between icon and text */
   outline: none !important; 
   -webkit-tap-highlight-color: transparent !important; 
-  transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) !important;
+  transition: none !important;
 }
 
-/* Base Inactive State */
+/* Base Inactive State (Olive Green, Outlined) */
 nav#admin-section-nav.admin-section-nav button i {
-  margin: 0 !important;
-  font-size: 26px !important; 
-  color: var(--forest-600) !important; 
-  transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) !important;
-  -webkit-text-stroke: 0 !important; 
+  font-family: "Phosphor", sans-serif !important; /* Enforces outline style */
+  font-size: 24px !important; /* Scaled down slightly */
+  color: var(--forest-600) !important; /* Olive Green */
+  transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), color 0.25s ease !important;
   font-weight: normal !important; 
+  margin: 0 !important;
 }
 
-/* Hide text labels */
-nav#admin-section-nav.admin-section-nav button span,
-nav#admin-section-nav.admin-section-nav button strong {
-  display: none !important;
+nav#admin-section-nav.admin-section-nav button span {
+  display: block !important;
+  font-size: 10.5px !important; /* Perfectly legible but compact */
+  font-weight: 600 !important;
+  color: var(--forest-600) !important;
+  transition: color 0.25s ease, font-weight 0.25s ease !important;
 }
 
-nav#admin-section-nav.admin-section-nav button:hover {
-  background: var(--sage-200) !important;
-}
-
-/* The Active Focus */
+/* Active Focus State (Pastel Green Pill + YouTube Solid Fill Icon) */
 nav#admin-section-nav.admin-section-nav button.active {
-  background: var(--sage-200) !important; 
-  opacity: 1 !important;
+  background: var(--sage-200) !important; /* Soft pastel green pill */
+  border-radius: 14px !important;
+  height: 46px !important; /* Slimmer pill fits perfectly inside the 58px bar */
+  margin: 6px 2px !important;
 }
 
 nav#admin-section-nav.admin-section-nav button.active i {
-  color: var(--forest-950) !important; 
-  font-size: 30px !important; 
-  transform: translateY(-2px) !important; 
-  filter: drop-shadow(0 4px 6px rgba(18, 34, 22, 0.2)) !important; 
+  font-family: "Phosphor-Fill", "Phosphor" !important; /* THE YOUTUBE MAGIC: Morphs into Solid Fill */
+  color: var(--forest-950) !important; /* Dark, highly visible contrast */
+  font-size: 24px !important; 
+  transform: scale(1.1) translateY(-1px) !important; /* Gentle pop animation */
+}
+
+nav#admin-section-nav.admin-section-nav button.active span {
+  color: var(--forest-950) !important;
+  font-weight: 800 !important;
 }
 
 /* --- Dashboard Open Badge Centering --- */
@@ -1839,32 +1846,7 @@ nav#admin-section-nav.admin-section-nav button.active i {
    PREMIUM OVERRIDES (ADMIN & POS)
    ========================================= */
 
-/* 1. Admin Navigation Bar */
-.admin-section-nav {
-  height: 76px !important;
-  background: #FCFCF9 !important;
-  border-top: 1px solid rgba(44, 76, 59, 0.1) !important;
-  box-shadow: 0 -8px 24px rgba(0,0,0,0.04) !important;
-  padding-bottom: env(safe-area-inset-bottom) !important;
-}
-.admin-section-nav button {
-  color: var(--forest-600) !important;
-  transition: all 0.2s ease !important;
-  margin: 6px 4px !important;
-  height: calc(100% - 12px) !important;
-}
-.admin-section-nav button i {
-  color: var(--forest-600) !important;
-}
-.admin-section-nav button.active {
-  background: var(--sage-200) !important;
-  border-radius: 12px !important;
-}
-.admin-section-nav button.active i,
-.admin-section-nav button.active span {
-  color: var(--forest-950) !important;
-  font-weight: 700 !important;
-}
+/* Legacy Admin Nav Block Destroyed to prevent conflicts */
 
 /* 2. Full-Bleed Edge-to-Edge Product Images */
 .pos-product-media {
