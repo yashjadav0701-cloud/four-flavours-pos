@@ -1684,15 +1684,16 @@ nav#admin-section-nav.admin-section-nav button.active span {
   border-radius: 10px;
   background: var(--sage-100);
   overflow: hidden;
-  border: 1px solid var(--line);
-  transition: width 0.5s cubic-bezier(0.2, 0.8, 0.2, 1), background 0.5s, border-color 0.5s;
+  border: none; /* Border completely removed */
+  box-shadow: 0 2px 8px rgba(0,0,0,0.04); /* Soft premium shadow replaces the border */
+  transition: width 0.5s cubic-bezier(0.2, 0.8, 0.2, 1), background 0.5s, box-shadow 0.5s;
   position: relative;
 }
 
 .premium-qty-wrapper.is-active {
   width: 96px;
   background: var(--paper);
-  border-color: var(--sage-300);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.06); /* Slightly elevated when expanded */
 }
 
 .premium-qty-btn {
@@ -1711,17 +1712,22 @@ nav#admin-section-nav.admin-section-nav button.active span {
 
 .premium-qty-value {
   position: absolute;
-  left: 32px;
-  width: 32px;
-  text-align: center;
-  font-size: 1.00 rem; /* Significantly larger, highly legible number */
+  left: 0;
+  top: 0;
+  width: 100%; /* Spans the entire 96px wrapper to guarantee absolute center */
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center; /* Mathematically centers the digit */
+  font-size: 1 rem; 
   font-weight: 700;
   color: var(--forest-950);
   opacity: 0;
-  transform: translateX(12px); /* Starts slightly to the right */
+  transform: translateX(12px); 
   transition: all 0.5s cubic-bezier(0.2, 0.8, 0.2, 1);
   user-select: none;
   z-index: 1;
+  pointer-events: none; /* Prevents the invisible full-width box from blocking button clicks */
 }
 
 .premium-qty-wrapper.is-active .premium-qty-value {
@@ -1991,7 +1997,8 @@ nav#admin-section-nav.admin-section-nav button.active span {
   opacity: 0;
   overflow: hidden;
   transition: all 0.5s cubic-bezier(0.2, 0.8, 0.2, 1);
-  border: 1px solid var(--sage-300);
+  border: none; /* Border completely removed */
+  box-shadow: 0 4px 12px rgba(0,0,0,0.06); /* Matches the product card shadow */
   border-radius: 14px;
   padding: 0;
   background: var(--paper);

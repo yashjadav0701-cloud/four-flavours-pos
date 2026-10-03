@@ -1,15 +1,12 @@
-const CACHE_NAME = "four-flavours-v2";
+const CACHE_NAME = "four-flavours-v3";
 
-// Do NOT cache everything blindly during install. 
-// We only cache the bare minimum to pass the PWA requirement.
 self.addEventListener("install", (event) => {
-  self.skipWaiting(); // Instantly activates the new service worker
+  self.skipWaiting();
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      // It's safer to cache just the root to pass the PWA check.
-      // If you add files here, a single 404 will break the entire installation.
+      // Extremely minimal cache to prevent 404 installation failures
       return cache.addAll(["/"]); 
-    }).catch(err => console.log("Cache bypass: ", err))
+    }).catch(err => console.error("Cache bypass: ", err))
   );
 });
 
@@ -26,8 +23,11 @@ self.addEventListener("activate", (event) => {
   self.clients.claim();
 });
 
-// Chrome strictly requires a fetch handler to consider it a PWA
 self.addEventListener("fetch", (event) => {
+  // CRITICAL FIX: Ignore non-HTTP requests (like wss:// from Supabase or chrome-extension://)
+  // If we don't ignore these, the Service Worker crashes and Chrome aborts the PWA installation!
+  if (!event.request.url.startsWith('http')) return;
+
   event.respondWith(
     fetch(event.request).catch(() => {
       return caches.match(event.request);
