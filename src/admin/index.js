@@ -585,6 +585,12 @@ async function renderAdminWorkspace(mount) {
     const b = event.target.closest("[data-section]");
     if (!b) return;
     section = b.dataset.section;
+    
+    // Clear notification highlight when the admin views the Orders tab
+    if (section === "orders") {
+      b.style.color = "";
+    }
+    
     updateNavUI();
     renderSection();
   });
@@ -617,23 +623,50 @@ async function renderAdminWorkspace(mount) {
         return;
       }
 
-      list.innerHTML = orders.map(o => `
-        <article class="admin-order-data-row">
-          <div class="order-cell-id">Order #${escapeHtml(o.order_number)}</div>
-          <div class="order-cell-date">${new Date(o.created_at).toLocaleString('en-IN', {day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit'})}</div>
+      // 1. Load the list of bills the Admin has already clicked on from local memory
+      const seenOrders = new Set(JSON.parse(localStorage.getItem("fourflavours.seen_orders") || "[]"));
+      
+      // 2. We will flag any UNSEEN order generated in the last 12 hours
+      const twelveHoursAgo = new Date(Date.now() - 12 * 60 * 60000);
+
+      list.innerHTML = orders.map(o => {
+        const orderDate = new Date(o.created_at);
+        // It is only "New" if it is recent AND the admin hasn't clicked it yet
+        const isNew = orderDate > twelveHoursAgo && !seenOrders.has(o.id);
+        
+        return `
+        <article class="admin-order-data-row" style="${isNew ? 'border-color: var(--gold-400); background: var(--gold-100); box-shadow: 0 4px 16px rgba(201,164,90,0.2);' : ''}">
+          <div class="order-cell-id" style="display: flex; align-items: center; gap: 8px;">
+            <span style="${isNew ? 'color: var(--gold-600);' : ''}">Order #${escapeHtml(o.order_number)}</span>
+            ${isNew ? `<span style="background: var(--gold-500); color: #fff; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 800; text-transform: uppercase;">New Bill</span>` : ''}
+          </div>
+          <div class="order-cell-date">${orderDate.toLocaleString('en-IN', {day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit'})}</div>
           <div class="order-cell-type">${o.order_type === 'dine_in' ? `Dine-in · Table ${tables.find(t => t.id === o.table_id)?.table_no || 'Unknown'}` : 'Takeaway'} · ${o.order_items.length} ${o.order_items.length === 1 ? 'item' : 'items'}</div>
           <div class="order-cell-price">${money(o.grand_total, settings.currency_symbol)}</div>
           <div class="order-cell-actions">
-            <button class="icon-btn icon-btn-light" data-view-order="${o.id}" title="View Receipt"><i class="ph-bold ph-printer"></i></button>
+            <button class="icon-btn icon-btn-light" data-view-order="${o.id}" title="View Receipt" style="${isNew ? 'background: #fff; border-color: var(--gold-400); color: var(--forest-900);' : ''}"><i class="ph-bold ph-printer"></i></button>
             <button class="icon-btn icon-btn-danger" data-delete-order="${o.id}" title="Delete Order"><i class="ph-bold ph-trash"></i></button>
           </div>
         </article>
-      `).join("");
+      `}).join("");
 
       list.addEventListener("click", e => {
         const view = e.target.closest("[data-view-order]");
         const del = e.target.closest("[data-delete-order]");
-        if (view) showAdminReceiptPreview(orders.find(x => x.id === view.dataset.viewOrder));
+        
+        if (view) {
+          const orderId = view.dataset.viewOrder;
+          
+          // 3. Mark the bill as SEEN the moment the admin clicks it
+          const updatedSeen = new Set(JSON.parse(localStorage.getItem("fourflavours.seen_orders") || "[]"));
+          updatedSeen.add(orderId);
+          localStorage.setItem("fourflavours.seen_orders", JSON.stringify([...updatedSeen]));
+          
+          // Show the receipt modal and instantly refresh the list to drop the Gold highlight
+          showAdminReceiptPreview(orders.find(x => x.id === orderId));
+          renderOrders(); 
+        }
+        
         if (del) deleteOrder(orders.find(x => x.id === del.dataset.deleteOrder));
       });
     } catch (err) {
@@ -869,15 +902,14 @@ async function renderAdminWorkspace(mount) {
         <article class="admin-panel"><div class="panel-head"><div><span class="eyebrow">Quick actions</span><h2>Run the floor</h2></div></div><div class="quick-action-grid"><button class="quick-action" data-go="tables"><i class="ph ph-armchair"></i><span><strong>Manage tables</strong><small>Add, edit, delete and print QR codes.</small></span><i class="ph ph-arrow-right"></i></button><button class="quick-action" data-go="menu"><i class="ph ph-fork-knife"></i><span><strong>Manage menu</strong><small>Names, descriptions, prices and visibility.</small></span><i class="ph ph-arrow-right"></i></button><button class="quick-action" data-go="settings"><i class="ph ph-gear"></i><span><strong>Tax & UPI</strong><small>Keep server-side billing settings current.</small></span><i class="ph ph-arrow-right"></i></button></div></article>
         <article class="admin-panel"><div class="panel-head"><div><span class="eyebrow">Dining sessions</span><h2>Open tables</h2></div><span class="soft-badge">${sessions.length} active</span></div><div class="session-mini-scroll" id="overview-session-list">
           ${sessions.length ? sessions.map(s => `
-            <div class="admin-mini-row" style="padding: 16px 12px; border: 1px solid var(--line); border-radius: 14px; margin-bottom: 8px; background: var(--paper);">
-              <div class="mini-row-icon"><i class="ph-bold ph-armchair"></i></div>
+            <div class="admin-mini-row" style="padding: 16px 12px; border: 1px solid ${s.status === 'bill_requested' ? 'var(--gold-400)' : 'var(--line)'}; border-radius: 14px; margin-bottom: 8px; background: ${s.status === 'bill_requested' ? 'var(--gold-100)' : 'var(--paper)'}; ${s.status === 'bill_requested' ? 'box-shadow: 0 4px 16px rgba(201,164,90,0.25);' : ''}">
+              <div class="mini-row-icon" style="${s.status === 'bill_requested' ? 'background: var(--gold-400); color: #fff;' : ''}"><i class="ph-bold ${s.status === 'bill_requested' ? 'ph-bell-ringing qty-pulse' : 'ph-armchair'}"></i></div>
               <div style="flex: 1; margin-left: 14px;">
-                <strong style="font-size: 15px;">Table ${escapeHtml(tables.find(t => t.id === s.table_id)?.table_no ?? "—")}</strong>
-                <span style="font-size: 12px; color: var(--muted);">${s.status === "bill_requested" ? "Bill requested" : s.status === "bill_ready" ? "Bill ready" : "Dining session open"}</span>
+                <strong style="font-size: 15px; ${s.status === 'bill_requested' ? 'color: var(--gold-600);' : ''}">Table ${escapeHtml(tables.find(t => t.id === s.table_id)?.table_no ?? "—")}</strong>
+                <span style="font-size: 12px; color: ${s.status === 'bill_requested' ? 'var(--gold-600)' : 'var(--muted)'}; font-weight: ${s.status === 'bill_requested' ? '800' : 'normal'};">${s.status === "bill_requested" ? "Customer requested bill!" : s.status === "bill_ready" ? "Bill ready" : "Dining session open"}</span>
               </div>
               <div style="display: flex; align-items: center; gap: 14px;">
-                <strong style="color: var(--success); font-size: 14px; text-transform: uppercase;">Open</strong>
-                <button class="btn btn-primary btn-small" data-manage-session="${s.id}">Manage</button>
+                <button class="${s.status === 'bill_requested' ? 'btn btn-primary btn-small qty-pulse' : 'btn btn-primary btn-small'}" data-manage-session="${s.id}">Manage</button>
               </div>
             </div>
           `).join("") : `<div class="empty-state compact"><i class="ph ph-circle-wavy-check"></i><strong>No open table sessions</strong><span>The floor is currently clear.</span></div>`}
@@ -921,9 +953,10 @@ async function renderAdminWorkspace(mount) {
 
     list.innerHTML = tables.length ? tables.map(t => {
       const openSession = activeSessions.find(s => s.table_id === t.id);
+      const isBillReq = openSession?.status === "bill_requested";
       
       return `
-        <article class="table-admin-card ${openSession ? 'occupied-card' : ''} ${t.is_active ? "" : "inactive"}">
+        <article class="table-admin-card ${isBillReq ? 'bill-requested-card' : openSession ? 'occupied-card' : ''} ${t.is_active ? "" : "inactive"}">
           <div class="table-badge">
             <i class="ph-bold ph-armchair"></i>
             <strong>${escapeHtml(t.table_no)}</strong>
@@ -978,10 +1011,8 @@ async function renderAdminWorkspace(mount) {
     const modal = openAppModal({
       title: `Table ${table.table_no} Management`,
       subtitle: "Review the active table tab, add items, or close the table.",
-      body: `<div id="admin-table-manager-host"><div class="empty-state"><i class="ph ph-spinner-gap ph-spin"></i><strong>Loading table data...</strong></div></div>`,
-      actions: [
-        { label: "Close Window", icon: "ph-x", className: "btn-quiet", onClick: ({ close }) => close() }
-      ]
+      body: `<div id="admin-table-manager-host" style="display: flex; flex-direction: column; min-height: 50vh;"><div class="empty-state"><i class="ph ph-spinner-gap ph-spin"></i><strong>Loading table data...</strong></div></div>`,
+      actions: [] // Strip default actions to merge them into a unified sticky block
     });
 
     const host = modal.root.querySelector("#admin-table-manager-host");
@@ -993,7 +1024,14 @@ async function renderAdminWorkspace(mount) {
         if (error) throw error;
 
         if (!ordersList || ordersList.length === 0) {
-          host.innerHTML = `<div class="empty-state"><i class="ph ph-warning-circle"></i><strong>No active order found</strong><span>The table session was opened, but no items were sent to the kitchen.</span></div><div style="display:flex; gap: 10px; justify-content:center;"><button class="btn btn-primary" id="admin-add-items"><i class="ph-bold ph-plus"></i> Add Items</button> <button class="btn btn-danger" id="force-close-empty"><i class="ph-bold ph-power"></i> Force Close Table</button></div>`;
+          host.innerHTML = `
+            <div style="display: flex; flex-direction: column; flex: 1;">
+              <div class="empty-state"><i class="ph ph-warning-circle"></i><strong>No active order found</strong><span>The table session was opened, but no items were sent to the kitchen.</span></div>
+              <div style="position: sticky; bottom: -17px; background: var(--paper); padding: 12px 0 0 0; margin-top: auto; border-top: 1px solid var(--line); display: flex; gap: 8px;">
+                <button class="btn btn-primary" id="admin-add-items" style="flex: 1;"><i class="ph-bold ph-plus"></i> Add Items</button> 
+                <button class="btn btn-danger" id="force-close-empty" style="flex: 1;"><i class="ph-bold ph-power"></i> Close Table</button>
+              </div>
+            </div>`;
           
           host.querySelector("#force-close-empty").addEventListener("click", async () => {
              await supabase.from("dining_sessions").update({ status: 'closed' }).eq("id", session.id);
@@ -1037,18 +1075,19 @@ async function renderAdminWorkspace(mount) {
         });
 
         const displayItems = Array.from(tempMap.values());
+        const isBillReq = session.status === "bill_requested";
 
         host.innerHTML = `
-          <div class="active-dining-dashboard" style="text-align: left;">
-            <div class="dining-status-banner">
-              <i class="ph-bold ph-receipt"></i>
+          <div class="active-dining-dashboard" style="text-align: left; display: flex; flex-direction: column; flex: 1;">
+            <div class="dining-status-banner" style="${isBillReq ? 'background: var(--gold-100); color: var(--gold-600); border: 1px solid var(--gold-400);' : ''}">
+              <i class="ph-bold ph-${isBillReq ? 'bell-ringing qty-pulse' : 'receipt'}"></i>
               <div>
-                <strong>Table Tab is open</strong>
+                <strong style="${isBillReq ? 'color: var(--gold-600);' : ''}">${isBillReq ? 'Customer Requested Bill' : 'Table Tab is open'}</strong>
                 <span>Grand Total: ${money(grandTotal, settings.currency_symbol)}</span>
               </div>
             </div>
             <h3 class="dining-section-title">Customer's Order Items</h3>
-            <div class="dining-items-list" style="max-height: 40vh; overflow-y: auto; margin-bottom: 16px;">
+            <div class="dining-items-list" style="max-height: 45vh; overflow-y: auto; margin-bottom: 0; padding-bottom: 12px;">
               ${displayItems.map(i => `
                 <div class="dining-item-row" style="padding-right: 12px; align-items: center;">
                   <div class="dining-item-info">
@@ -1061,7 +1100,9 @@ async function renderAdminWorkspace(mount) {
                 </div>
               `).join("")}
             </div>
-            <div style="display: flex; gap: 8px; border-top: 1px solid var(--line); padding-top: 16px;">
+            
+            <!-- STICKY FOOTER (Merged Actions & Dead Space Eliminated) -->
+            <div style="position: sticky; bottom: -17px; background: var(--paper); padding: 12px 0 0 0; margin-top: auto; border-top: 1px solid var(--line); display: flex; gap: 8px;">
               <button class="btn btn-quiet" id="admin-add-items" style="flex: 1; padding: 0 4px; font-size: 12px;"><i class="ph-bold ph-plus"></i> Add Items</button>
               <button class="btn btn-quiet" id="admin-view-bill" style="flex: 1; padding: 0 4px; font-size: 12px;"><i class="ph-bold ph-printer"></i> Bill</button>
               <button class="btn btn-primary" id="admin-close-table" style="flex: 1.5; padding: 0 4px; font-size: 12px;"><i class="ph-bold ph-check-circle"></i> Close Table</button>
@@ -2087,20 +2128,30 @@ async function renderAdminWorkspace(mount) {
 
   // --- LIVE MONITORING WEBSOCKET ---
   const realtimeChannel = supabase.channel('admin-live-updates')
-    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'orders' }, payload => {
-      // 1. Alert the staff instantly
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'orders' }, async payload => {
       showToast("New Order Received", `Order #${payload.new.order_number} has been confirmed.`);
-      
-      // 2. Silently update the UI based on what the admin is currently viewing
-      if (section === "orders") {
-        renderOrders();
-      } else if (section === "overview") {
-        reload();
-      }
+      if (section === "orders") renderOrders();
+      else if (section === "overview") await reload();
     })
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'dining_sessions' }, () => {
-      // Live update the table statuses on the Overview dashboard
-      if (section === "overview") reload();
+    .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'dining_sessions' }, async payload => {
+      // CUSTOMER AUTO-CLOSE DETECTION: 
+      // If status jumps directly from 'open' to 'closed', the customer generated the bill!
+      if (payload.new?.status === "closed" && payload.old?.status === "open") {
+        showToast("Bill Generated & Table Freed!", `A customer finished their meal. Check the Orders tab for their bill.`, "success");
+        
+        // Highlight the Orders tab in Gold to notify the admin
+        const ordersNavBtn = mount.querySelector('[data-section="orders"]');
+        if (ordersNavBtn) {
+          ordersNavBtn.style.color = "var(--gold-600)";
+          ordersNavBtn.classList.remove("qty-pulse");
+          void ordersNavBtn.offsetWidth;
+          ordersNavBtn.classList.add("qty-pulse");
+        }
+      } else if (payload.new?.status === "closed" && payload.old?.status !== "closed") {
+        showToast("Table Closed", "A table session was finalized by staff.");
+      }
+      
+      if (section === "overview" || section === "tables") await reload();
     })
     .subscribe();
 

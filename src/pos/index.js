@@ -37,10 +37,25 @@ export async function render({ mount }) {
       mount.innerHTML = `<main class="customer-page"><section class="customer-message"><div class="message-mark"><i class="ph ph-qr-code"></i></div><span class="eyebrow">Four Flavours</span><h1>Table unavailable</h1><p>This QR code is invalid or no longer active.</p></section></main>`;
       return () => {};
     }
-    // Bootstrap secure customer session
+    
     const sessionKey = `fourflavours.session.${currentTableObj.id}`;
+    
+    // VERIFY LOCAL CACHE BEFORE BOOTSTRAPPING
+    // If the database says there is no open session, wipe the user's cache immediately
+    const { data: checkSession } = await supabase.from("dining_sessions")
+      .select("status")
+      .eq("table_id", currentTableObj.id)
+      .eq("status", "open")
+      .maybeSingle();
+      
+    if (!checkSession) {
+      localStorage.removeItem(sessionKey);
+    }
+
+    // Bootstrap secure customer session
     const { data: sessionBootstrap, error: sessionError } = await supabase.rpc("ensure_customer_session", { p_table_id: currentTableObj.id });
     if (sessionError) throw sessionError;
+    
     customerSessionToken = (sessionBootstrap?.[0] ?? sessionBootstrap)?.session_token;
     if (customerSessionToken) localStorage.setItem(sessionKey, customerSessionToken);
   }
@@ -269,27 +284,33 @@ export async function render({ mount }) {
     showActiveOrderDashboard({ order, settings, current_state: { tableId, orderType: "dine_in" }, sessionKey: tableId });
   }
 
+  let unseenBillRequests = 0;
+
   realtimeChannel = supabase.channel(`live-orders-${crypto.randomUUID()}`)
-    .on("postgres_changes", { event: "INSERT", schema: "public", table: "orders" }, payload => {
-      unreadOrders += 1;
-      const badge = mount.querySelector("#pos-order-badge");
-      if (badge) {
-        badge.textContent = String(unreadOrders);
-        badge.classList.remove("hidden");
-      }
-      showToast("New table order", `Order #${payload.new?.order_number || ''} has arrived.`);
-      
-      // Auto-refresh Admin drawer if it is currently open
-      if (document.querySelector(".session-scroll-container")) openOrdersDrawer();
-    })
-    .on("postgres_changes", { event: "UPDATE", schema: "public", table: "dining_sessions" }, payload => {
-      if (payload.new?.status === "bill_requested") {
-        showToast("Bill Requested", `A table requested the final bill.`);
-        // Auto-refresh Admin drawer when customer clicks "Finish Meal"
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "orders" }, payload => {
+        unreadOrders += 1;
+        const badge = mount.querySelector("#pos-order-badge");
+        if (badge) {
+          badge.textContent = String(unreadOrders + unseenBillRequests);
+          badge.classList.remove("hidden");
+        }
+        showToast("New table order", `Order #${payload.new?.order_number || ''} has arrived.`);
         if (document.querySelector(".session-scroll-container")) openOrdersDrawer();
-      }
-    })
-    .subscribe(status => { const node = mount.querySelector("#pos-connection"); if (!node) return; const live = status === "SUBSCRIBED"; node.innerHTML = `<span class="connection-dot ${live ? "live" : "offline"}"></span>${live ? "Live" : "Offline"}`; });
+      })
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "dining_sessions" }, payload => {
+        
+        // CUSTOMER AUTO-CLOSE NOTIFICATION
+        // If status jumps directly from 'open' to 'closed', the customer requested the bill!
+        if (payload.new?.status === "closed" && payload.old?.status === "open") {
+          showToast("Bill Generated & Table Freed!", `A customer finished their meal. Print bill from Admin Orders tab.`, "success");
+        } 
+        // STAFF MANUAL CLOSE NOTIFICATION
+        else if (payload.new?.status === "closed" && payload.old?.status !== "closed") {
+           showToast("Table Freed", "A table has been cleared and is ready for new customers.");
+        }
+        
+      })
+      .subscribe(status => { const node = mount.querySelector("#pos-connection"); if (!node) return; const live = status === "SUBSCRIBED"; node.innerHTML = `<span class="connection-dot ${live ? "live" : "offline"}"></span>${live ? "Live" : "Offline"}`; });
 
   function getSubCategoryIcon(subCat) {
     const s = subCat.toLowerCase();
@@ -652,10 +673,9 @@ export async function render({ mount }) {
     }
   }
 
-  function openReview() {
+  async function openReview() {
     const current = state.getState();
     if (!state.canSubmit()) { 
-      // Smart Redirect: If it's dine-in and no table is selected, instantly pop open the table modal!
       if (current.orderType === "dine_in" && !current.tableId) {
         window._autoReviewPending = true; 
         const tableWrap = mount.querySelector("#pos-table-wrap");
@@ -753,46 +773,72 @@ export async function render({ mount }) {
       body: `<div id="active-dash-host"><div class="empty-state"><i class="ph ph-spinner-gap qty-pulse"></i><span>Syncing live tab...</span></div></div>`,
       actions: [
         { label: "Keep Ordering", icon: "ph-plus-circle", className: "btn-quiet", onClick: ({ close }) => close() },
-        { label: isCustomerMode ? "Finish Meal" : "Complete Order", icon: "ph-check-circle", className: "btn-primary", onClick: ({ close }) => {
-            // UNIFIED CHECKOUT: Prompts for Final Bill Generation on both Staff and Customer sides
+        { label: isCustomerMode ? "Request Bill" : "Complete Order", icon: "ph-receipt", className: "btn-primary", onClick: ({ close }) => {
+            // UNIFIED CHECKOUT: Prompts for Final Bill Generation
             openAppModal({
-              title: "Generate Final Bill?",
-              subtitle: "Confirm you are finished adding items to this table.",
-              body: `<div class="danger-confirm"><div class="danger-confirm-icon" style="background: var(--sage-200); color: var(--forest-900);"><i class="ph-bold ph-receipt"></i></div><h3>Generate Final Bill?</h3><p>This will finalize the tab and lock the table from further ordering.</p></div>`,
+              title: isCustomerMode ? "Request Final Bill?" : "Generate Final Bill?",
+              subtitle: isCustomerMode ? "Your waiter will bring the physical bill to your table." : "Confirm you are finished adding items to this table.",
+              body: `<div class="danger-confirm"><div class="danger-confirm-icon" style="background: var(--sage-200); color: var(--forest-900);"><i class="ph-bold ph-receipt"></i></div><h3>${isCustomerMode ? "Request Final Bill?" : "Generate Final Bill?"}</h3><p>${isCustomerMode ? "This will finalize your tab. Are you ready to pay?" : "This will finalize the tab and lock the table from further ordering."}</p></div>`,
               actions: [
                 { label: "No, Go Back", className: "btn-quiet", onClick: (ctx) => ctx.close() },
-                { label: "Yes, I'm Done", className: "btn-primary", onClick: async (ctx) => {
+                { label: isCustomerMode ? "Yes, Request Bill" : "Yes, I'm Done", className: "btn-primary", onClick: async (ctx) => {
                     ctx.button.disabled = true;
                     try {
                       if (current_state.orderType === "dine_in") {
                         if (isCustomerMode) {
                           const token = customerSessionToken || localStorage.getItem(`fourflavours.session.${current_state.tableId}`);
-                          await supabase.rpc("request_session_bill", { p_table_id: current_state.tableId, p_session_token: token });
+                          const { error: rpcError } = await supabase.rpc("request_session_bill", { p_table_id: current_state.tableId, p_session_token: token });
+                          if (rpcError) throw rpcError;
+                          
+                          // CRITICAL FIX: Wipe local storage so the table becomes FREE for the next scan!
+                          localStorage.removeItem(`fourflavours.session.${current_state.tableId}`);
                         } else {
                           const { data: sess } = await supabase.from("dining_sessions").select("id").eq("table_id", current_state.tableId).in("status", ["open", "bill_requested"]).maybeSingle();
-                          if (sess) await supabase.rpc("mark_session_bill_ready", { p_session_id: sess.id });
+                          if (sess) {
+                            const { error: updateError } = await supabase.rpc("mark_session_bill_ready", { p_session_id: sess.id });
+                            if (updateError) throw updateError;
+                          }
                         }
                       }
-                    } catch(e) { console.error("Failed to close table:", e); }
+                    } catch(e) { 
+                      console.error("Failed to process bill request:", e); 
+                      showToast("Action Failed", e.message || "Could not process request.", "error");
+                      ctx.button.disabled = false;
+                      return; // HALT EXECUTION: Never show the Thank You screen if the backend fails!
+                    }
                     
                     ctx.close(); close(); 
-                    
-                    // Inject the mathematically perfect aggregated totals across all rounds into the final receipt!
-                    showReceiptPreview({ 
-                      order: {
-                        ...rootOrder,
-                        subtotal: aggregatedBill.subtotal,
-                        cgst: aggregatedBill.cgst,
-                        sgst: aggregatedBill.sgst,
-                        rounding: aggregatedBill.rounding,
-                        grand_total: aggregatedBill.grand_total
-                      }, 
-                      items: displayItems, 
-                      settings, 
-                      current_state 
-                    }); 
-                    
                     delete activeTableOrders[sessionKey];
+                    
+                    if (isCustomerMode) {
+                      // CUSTOMER UX: Shows ONLY after the database successfully records the request
+                      document.getElementById("app").innerHTML = `
+                        <div class="thank-you-screen">
+                          <div class="thank-you-card">
+                            <div class="thank-you-icon"><i class="ph-fill ph-bell-ringing"></i></div>
+                            <h1 class="thank-you-title">Thank You!</h1>
+                            <p class="thank-you-message">Your bill is on the way to your table.</p>
+                            <div class="thank-you-divider"></div>
+                            <p class="thank-you-footer">We hope you enjoyed your time at Four Flavours.<br>Please wait while our staff attends to you.</p>
+                          </div>
+                        </div>
+                      `;
+                    } else {
+                      // ADMIN UX: Generate the mathematical print preview receipt as usual
+                      showReceiptPreview({ 
+                        order: {
+                          ...rootOrder,
+                          subtotal: aggregatedBill.subtotal,
+                          cgst: aggregatedBill.cgst,
+                          sgst: aggregatedBill.sgst,
+                          rounding: aggregatedBill.rounding,
+                          grand_total: aggregatedBill.grand_total
+                        }, 
+                        items: displayItems, 
+                        settings, 
+                        current_state 
+                      }); 
+                    }
                 }}
               ]
             });
@@ -806,17 +852,35 @@ export async function render({ mount }) {
     modal.close = () => { clearInterval(syncTimer); originalClose(); };
 
     async function fetchLiveSession() {
-      // 100% PARITY FIX: Delete restrictive Customer RPCs. 
-      // Everyone reads directly from the tables to guarantee perfect syncing and eliminate empty lists!
       if (current_state.orderType === "takeaway") {
          const { data } = await supabase.from("orders").select("*, order_items(*)").eq("id", rootOrder.id).single();
          if (data) processOrders([data]);
          return;
       }
       
-      const { data: session } = await supabase.from("dining_sessions").select("id").eq("table_id", current_state.tableId).in("status", ["open", "bill_requested", "bill_ready"]).maybeSingle();
-      if (session) {
-         const { data } = await supabase.from("orders").select("*, order_items(*)").eq("session_id", session.id).neq("status", "cancelled").order("created_at", { ascending: true });
+      // Fetch the actual current status of the session in the database
+      const { data: activeSession } = await supabase.from("dining_sessions")
+         .select("id, status")
+         .eq("table_id", current_state.tableId)
+         .order("created_at", { ascending: false })
+         .limit(1)
+         .maybeSingle();
+
+      // AUTO-RESET: If the session was closed, violently wipe local storage and force a refresh!
+      if (activeSession && activeSession.status === "closed") {
+         localStorage.removeItem(`fourflavours.session.${current_state.tableId}`);
+         customerSessionToken = null;
+         
+         // If they are on the Thank You screen, leave them there. 
+         // If they are viewing the old tab, force a hard reload to clear the UI.
+         if (!document.querySelector(".thank-you-screen")) {
+            window.location.reload();
+         }
+         return;
+      }
+
+      if (activeSession && ["open", "bill_requested", "bill_ready"].includes(activeSession.status)) {
+         const { data } = await supabase.from("orders").select("*, order_items(*)").eq("session_id", activeSession.id).neq("status", "cancelled").order("created_at", { ascending: true });
          if (data) processOrders(data);
       } else {
          const { data } = await supabase.from("orders").select("*, order_items(*)").eq("id", rootOrder.id).single();
@@ -1023,14 +1087,26 @@ export async function render({ mount }) {
 
   async function openOrdersDrawer() {
     unreadOrders = 0;
-    const badge = mount.querySelector("#pos-order-badge"); if (badge) { badge.classList.add("hidden"); badge.textContent = "0"; }
+    unseenBillRequests = 0;
+    const badge = mount.querySelector("#pos-order-badge"); 
+    const bellIcon = mount.querySelector("#pos-orders");
+    
+    if (badge) { 
+      badge.classList.add("hidden"); 
+      badge.textContent = "0"; 
+      badge.style.background = "var(--gold-500)"; // Reset to default
+      badge.style.color = "var(--forest-950)";
+    }
+    if (bellIcon) {
+      bellIcon.style.borderColor = "var(--forest-700)"; // Reset to default
+    }
     const { data: sessions, error } = await supabase.from("dining_sessions").select("*").neq("status", "closed").order("bill_requested_at", { ascending: false, nullsFirst: false }).order("created_at", { ascending: false });
     if (error) return showToast("Could not load table orders", error.message, "error");
 
     const modal = openAppModal({
       title: "Table orders",
       subtitle: "Customer rounds stay together until the final payment.",
-      body: `<div class="session-scroll-container">${sessions?.length ? sessions.map(s => `<article class="session-card"><div class="session-card-head"><div><span class="eyebrow">Table</span><h3>${escapeHtml(tables.find(t => t.id === s.table_id)?.table_no ?? "—")}</h3></div><span class="session-status ${s.status}"><i class="ph ph-${s.status === "bill_requested" ? "receipt" : s.status === "bill_ready" ? "check-circle" : "clock"}"></i>${s.status === "bill_requested" ? "Bill requested" : s.status === "bill_ready" ? "Bill ready" : "Open"}</span></div><div class="session-summary" data-session-summary="${s.id}"><span>Loading…</span></div><div class="session-actions">${s.status === "bill_requested" ? `<button class="btn btn-primary btn-small" data-ready-bill="${s.id}"><i class="ph ph-receipt"></i>Prepare bill</button>` : ""}${s.status === "bill_ready" ? `<button class="btn btn-dark btn-small" data-close-session="${s.id}"><i class="ph ph-check"></i>Complete payment</button>` : ""}</div></article>`).join("") : `<div class="empty-state"><i class="ph ph-bell-slash"></i><strong>No open customer sessions</strong><span>New QR orders appear here automatically.</span></div>`}</div>`,
+      body: `<div class="session-scroll-container">${sessions?.length ? sessions.map(s => `<article class="session-card ${s.status === 'bill_requested' ? 'bill-requested-card' : ''}"><div class="session-card-head"><div><span class="eyebrow">Table</span><h3>${escapeHtml(tables.find(t => t.id === s.table_id)?.table_no ?? "—")}</h3></div><span class="session-status ${s.status}"><i class="ph ph-${s.status === "bill_requested" ? "receipt" : s.status === "bill_ready" ? "check-circle" : "clock"}"></i>${s.status === "bill_requested" ? "Bill requested" : s.status === "bill_ready" ? "Bill ready" : "Open"}</span></div><div class="session-summary" data-session-summary="${s.id}"><span>Loading…</span></div><div class="session-actions">${s.status === "bill_requested" ? `<button class="btn btn-primary btn-small" data-ready-bill="${s.id}"><i class="ph ph-receipt"></i>Prepare bill</button>` : ""}${s.status === "bill_ready" ? `<button class="btn btn-dark btn-small" data-close-session="${s.id}"><i class="ph ph-check"></i>Complete payment</button>` : ""}</div></article>`).join("") : `<div class="empty-state"><i class="ph ph-bell-slash"></i><strong>No open customer sessions</strong><span>New QR orders appear here automatically.</span></div>`}</div>`,
       actions: [{ label: "Close", icon: "ph-x", className: "btn-quiet", onClick: ({ close }) => close() }]
     });
 

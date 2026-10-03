@@ -358,7 +358,13 @@ button,input,select,textarea{font:inherit}button{border:0}button:disabled{cursor
 .grid-refresh-anim {
   animation: grid-refresh 250ms ease-out forwards;
 }
-.session-scroll-container{height:min(62vh,560px);display:grid;align-content:start;gap:8px}.session-card{padding:11px;border:1px solid var(--line);border-radius:13px;background:var(--cream-50)}.session-card-head{display:flex;align-items:center;justify-content:space-between;gap:8px}.session-card-head h3{margin:4px 0 0;font-size:.88rem}.session-summary{display:flex;gap:10px;margin-top:10px}.session-summary>div{min-width:72px;padding:7px;border-radius:9px;background:#fff;border:1px solid var(--line)}.session-summary strong,.session-summary span{display:block}.session-summary strong{font-size:.82rem}.session-summary span{margin-top:2px;color:var(--muted);font-size:.58rem}.session-actions{display:flex;justify-content:flex-end;gap:6px;margin-top:8px}
+.session-scroll-container{height:min(62vh,560px);display:grid;align-content:start;gap:8px}
+.session-card{padding:11px;border:1px solid var(--line);border-radius:13px;background:var(--cream-50)}
+.session-card.bill-requested-card {
+  border-color: var(--gold-400) !important;
+  background: var(--gold-100) !important;
+  box-shadow: 0 6px 20px rgba(201, 164, 90, 0.2) !important;
+}.session-card-head{display:flex;align-items:center;justify-content:space-between;gap:8px}.session-card-head h3{margin:4px 0 0;font-size:.88rem}.session-summary{display:flex;gap:10px;margin-top:10px}.session-summary>div{min-width:72px;padding:7px;border-radius:9px;background:#fff;border:1px solid var(--line)}.session-summary strong,.session-summary span{display:block}.session-summary strong{font-size:.82rem}.session-summary span{margin-top:2px;color:var(--muted);font-size:.58rem}.session-actions{display:flex;justify-content:flex-end;gap:6px;margin-top:8px}
 
 /* Access */
 .access-screen{background:radial-gradient(circle at 50% 15%,rgba(201,164,90,.09),transparent 34%),var(--cream-100)}.access-screen.dark-access{background:var(--forest-950)}.access-card{width:min(100%,460px);padding:28px;border:1px solid var(--line);border-radius:25px;background:var(--paper);box-shadow:var(--shadow-strong)}.dark-access .access-card{border-color:rgba(255,255,255,.1);background:var(--forest-900);color:#fff}.access-brand{display:flex;align-items:center;gap:11px}.access-logo{width:60px;height:60px;object-fit:cover;border-radius:17px;background:#fff}.access-brand strong{display:block;margin-top:3px;color:var(--forest-900);font-size:1rem}.dark-access .access-brand strong{color:#fff}.access-card h1{margin:19px 0 7px;font-size:1.5rem;letter-spacing:-.03em}.access-copy,.access-card>p{margin:0 0 18px;color:var(--muted);font-size:.76rem;line-height:1.55}.dark-access .access-copy{color:#aebaae}.pin-input {
@@ -399,15 +405,15 @@ button,input,select,textarea{font:inherit}button{border:0}button:disabled{cursor
 
 .thermal-receipt {
   width: 80mm;
-  margin: 0 auto 20px auto; /* Adds external space at the bottom of the preview scroll */
-  padding: 1cm; /* Exact 1cm internal margin for the print */
+  margin: 0 auto 20px auto; 
+  padding: 4mm 4mm 16mm 4mm; /* Minimal sides/top, extra space at bottom for auto-cutter */
   font-family: 'Inter', 'Helvetica Neue', Helvetica, Arial, sans-serif;
   color: #000;
   background: #fff;
   font-size: 12px;
   line-height: 1.4;
-  box-sizing: border-box; /* Ensures the 1cm padding doesn't stretch the 80mm width */
-  box-shadow: 0 4px 15px rgba(0,0,0,0.1); /* Adds a paper drop-shadow in the preview */
+  box-sizing: border-box; 
+  box-shadow: 0 4px 15px rgba(0,0,0,0.1); 
 }
 
 @media print {
@@ -2126,4 +2132,78 @@ nav#admin-section-nav.admin-section-nav button.active span {
 .app-topbar, .customer-topbar {
   z-index: 110 !important;
   background: var(--paper) !important; 
+}
+
+/* =========================================
+   CUSTOMER POST-ORDER UX (THANK YOU SCREEN)
+   ========================================= */
+.thank-you-screen {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: var(--cream-100);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 999999; /* Guarantees it sits above all UI elements and navigation */
+  padding: 24px;
+  animation: fadeIn 0.4s ease-out;
+}
+
+.thank-you-card {
+  background: var(--paper);
+  padding: 48px 32px;
+  border-radius: 32px;
+  box-shadow: 0 24px 48px rgba(18, 34, 22, 0.08);
+  text-align: center;
+  max-width: 400px;
+  width: 100%;
+  border: 1px solid rgba(0,0,0,0.04);
+}
+
+.thank-you-icon {
+  font-size: 5rem;
+  color: var(--forest-900);
+  margin-bottom: 24px;
+  animation: float 3s ease-in-out infinite;
+}
+
+.thank-you-title {
+  font-size: 2.2rem;
+  font-weight: 900;
+  color: var(--forest-950);
+  margin-bottom: 12px;
+}
+
+.thank-you-message {
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: var(--forest-800);
+  margin-bottom: 32px;
+}
+
+.thank-you-divider {
+  width: 40px;
+  height: 4px;
+  background: var(--sage-300);
+  margin: 0 auto 32px auto;
+  border-radius: 4px;
+}
+
+.thank-you-footer {
+  font-size: 0.95rem;
+  color: var(--forest-600);
+  line-height: 1.6;
+}
+
+@keyframes fadeIn {
+  0% { opacity: 0; }
+  100% { opacity: 1; }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
 }
