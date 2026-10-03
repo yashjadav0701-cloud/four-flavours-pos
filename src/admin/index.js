@@ -512,13 +512,17 @@ async function fetchWorkspace() {
 
 async function renderAdminWorkspace(mount) {
   let { settings, products, tables, sessions, cuisines } = await fetchWorkspace();
+  window.__FF_TABLES__ = tables;
   let section = "overview";
 
   mount.innerHTML = `
     <section class="admin-page">
       <header class="app-topbar admin-topbar">
         <div class="topbar-side topbar-left" style="gap: 12px;">
-          <button class="icon-btn icon-btn-dark" id="admin-menu" title="Menu" aria-label="Menu"><i class="ph ph-list"></i></button>
+          <button class="icon-btn icon-btn-dark" id="admin-menu" title="Menu" aria-label="Menu" style="position: relative;">
+            <i class="ph ph-list"></i>
+            <span class="hamburger-dot" style="position: absolute; top: 4px; right: 4px; width: 8px; height: 8px; border-radius: 50%; background: #e11d48; display: none; border: 2px solid var(--paper);"></span>
+          </button>
           <img src="${versionedAsset("assets/images/website_logo.png")}" alt="Four Flavours" style="height: 40px; width: auto;" />
         </div>
         <div class="brand-center main-logo-only">
@@ -597,6 +601,7 @@ async function renderAdminWorkspace(mount) {
 
   async function reload() {
     ({ settings, products, tables, sessions, cuisines } = await fetchWorkspace());
+    window.__FF_TABLES__ = tables;
     renderSection();
   }
 
@@ -895,8 +900,31 @@ async function renderAdminWorkspace(mount) {
     const activeProducts = products.filter(p => p.is_active).length;
     const activeTables = tables.filter(t => t.is_active).length;
     const billRequests = sessions.filter(s => s.status === "bill_requested").length;
+    
+    // Inject the Dynamic Customer Activity Inbox
+    const alertsHtml = window.__adminAlerts && window.__adminAlerts.length > 0 ? `
+      <section class="admin-panel" style="margin-bottom: 16px; border-color: var(--gold-400); background: var(--gold-100); box-shadow: 0 4px 16px rgba(201,164,90,0.2);">
+         <div class="panel-head" style="margin-bottom: 12px; align-items: center;">
+           <div><span class="eyebrow" style="color: var(--gold-600);">Customer Activity Inbox</span><h2 style="color: var(--forest-950); display: flex; align-items: center; gap: 8px; margin-top: 4px;"><i class="ph-fill ph-bell-ringing qty-pulse" style="color: var(--gold-500);"></i> Needs Attention</h2></div>
+           <button class="btn btn-quiet btn-small" id="clear-admin-alerts" style="background: #fff; border-color: var(--gold-400); color: var(--forest-900); font-weight: 800; cursor: pointer;">Clear Inbox</button>
+         </div>
+         <div class="quick-action-grid">
+           ${window.__adminAlerts.map(a => `
+             <button class="quick-action" ${a.tableId ? `data-alert-table-id="${escapeHtml(a.tableId)}"` : `data-go="orders"`} style="background: #fff; border-left: 4px solid var(--gold-500); grid-template-columns: minmax(0,1fr) auto; border-radius: 10px; cursor: pointer; padding: 12px;">
+                <div style="min-width: 0; text-align: left;">
+                  <strong style="font-size: 14px; color: var(--forest-950);">${escapeHtml(a.title)}</strong>
+                  <span style="display: block; font-size: 13px; color: var(--muted); margin-top: 2px;">${escapeHtml(a.message)}</span>
+                </div>
+                <i class="ph-bold ph-arrow-right" style="color: var(--gold-500); font-size: 18px;"></i>
+             </button>
+           `).join("")}
+         </div>
+      </section>
+    ` : "";
+
     area.innerHTML = `
-      <section class="admin-hero"><div><span class="eyebrow">Control centre</span><h1>Everything in its place.</h1><p>Menu, tables, tax, UPI and table sessions in one restrained workspace.</p></div><div class="admin-hero-mark"><img src="${versionedAsset("assets/images/website_icon.png")}" alt=""></div></section>
+      ${alertsHtml}
+      <section class="admin-hero" style="${alertsHtml ? 'padding-top: 0;' : ''}"><div><span class="eyebrow">Control centre</span><h1>Everything in its place.</h1><p>Menu, tables, tax, UPI and table sessions in one restrained workspace.</p></div><div class="admin-hero-mark"><img src="${versionedAsset("assets/images/website_icon.png")}" alt=""></div></section>
       <section class="metric-grid">${metricCard("ph-fork-knife", activeProducts, "Active dishes")}${metricCard("ph-armchair", activeTables, "Active tables")}${metricCard("ph-bell", sessions.length, "Open sessions")}${metricCard("ph-receipt", billRequests, "Bill requests")}</section>
       <section class="admin-grid-two">
         <article class="admin-panel"><div class="panel-head"><div><span class="eyebrow">Quick actions</span><h2>Run the floor</h2></div></div><div class="quick-action-grid"><button class="quick-action" data-go="tables"><i class="ph ph-armchair"></i><span><strong>Manage tables</strong><small>Add, edit, delete and print QR codes.</small></span><i class="ph ph-arrow-right"></i></button><button class="quick-action" data-go="menu"><i class="ph ph-fork-knife"></i><span><strong>Manage menu</strong><small>Names, descriptions, prices and visibility.</small></span><i class="ph ph-arrow-right"></i></button><button class="quick-action" data-go="settings"><i class="ph ph-gear"></i><span><strong>Tax & UPI</strong><small>Keep server-side billing settings current.</small></span><i class="ph ph-arrow-right"></i></button></div></article>
@@ -918,6 +946,24 @@ async function renderAdminWorkspace(mount) {
     
     area.querySelectorAll("[data-go]").forEach(b => b.addEventListener("click", () => { section = b.dataset.go; updateNavUI(); renderSection(); }));
     
+    // INTELLIGENT ALERT ROUTING
+    area.querySelectorAll("[data-alert-table-id]").forEach(btn => {
+      btn.addEventListener("click", () => {
+         const tId = btn.dataset.alertTableId;
+         const table = tables.find(x => x.id === tId);
+         const session = sessions.find(x => x.table_id === tId && x.status !== 'closed');
+         
+         if (table && session) {
+             openAdminTableManager(table, session);
+         } else {
+             // Fallback: If table is Takeaway or session was already closed, go to Orders tab
+             section = "orders"; 
+             updateNavUI(); 
+             renderSection();
+         }
+      });
+    });
+    
     area.querySelector("#overview-session-list")?.addEventListener("click", e => {
       const row = e.target.closest("[data-manage-session]");
       if (!row) return;
@@ -925,14 +971,40 @@ async function renderAdminWorkspace(mount) {
       const table = tables.find(x => x.id === session?.table_id);
       if (table && session) openAdminTableManager(table, session);
     });
+    
+    area.querySelector("#clear-admin-alerts")?.addEventListener("click", () => {
+      if (window.clearGlobalNotification) window.clearGlobalNotification();
+      renderOverview();
+    });
   }
 
   function renderMenu() {
     area.innerHTML = `
-      <section class="section-title-row"><div><span class="eyebrow">Menu management</span><h1>Every dish, neatly managed.</h1><p>Long lists stay inside a contained vertical workspace instead of stretching the entire page.</p></div><button class="btn btn-primary" id="add-product"><i class="ph-bold ph-plus"></i>Add dish</button></section>
+      <section class="section-title-row menu-admin-heading">
+        <div class="menu-admin-heading-copy">
+          <span class="eyebrow">Menu management</span>
+          <h1>Every dish, neatly managed.</h1>
+          <p>The live menu stays here. Generate the complete print master from the button group below.</p>
+        </div>
+
+        <div class="menu-admin-actions" aria-label="Menu actions">
+          <button class="btn btn-quiet" id="generate-menu-pdf">
+            <i class="ph-bold ph-file-pdf"></i>
+            <span>Full Menu PDF</span>
+          </button>
+
+          <button class="btn btn-primary" id="add-product">
+            <i class="ph-bold ph-plus"></i>
+            <span>Add dish</span>
+          </button>
+        </div>
+      </section>
       <section class="admin-panel"><div class="panel-toolbar"><div class="search-wrap light"><i class="ph ph-magnifying-glass"></i><input class="search-input" id="product-search" type="search" placeholder="Search dishes or categories"></div><span class="soft-badge">${products.length} dishes</span></div><div class="admin-list-scroll" id="product-list"></div></section>`;
+    
     const search = area.querySelector("#product-search");
     const list = area.querySelector("#product-list");
+
+    area.querySelector("#generate-menu-pdf").addEventListener("click", () => openMenuPDFPreview());
     const paint = () => {
       const q = search.value.trim().toLowerCase();
       const visible = products.filter(p => !q || `${p.name} ${p.category} ${p.description ?? ""}`.toLowerCase().includes(q));
@@ -961,6 +1033,246 @@ async function renderAdminWorkspace(mount) {
     search.addEventListener("input", paint); paint();
     area.querySelector("#add-product").addEventListener("click", () => openProductEditor());
     
+    function openMenuPDFPreview() {
+      const activeProducts = products.filter(p => p.is_active).sort((a,b) => a.sort_order - b.sort_order);
+      
+      const targetCuisines = ["Indian", "Chinese", "Continental", "Mexican"];
+      const menuTree = {};
+      const cuisineItemCounts = {};
+      
+      targetCuisines.forEach(c => { 
+          menuTree[c] = {}; 
+          cuisineItemCounts[c] = 0; 
+      });
+
+      // Group active dishes and accurately count the total items in each cuisine
+      activeProducts.forEach(p => {
+         const parts = String(p.category || "").split(" - ");
+         const cName = parts[0]?.trim();
+         const subName = parts[1]?.trim() || "Others";
+         const targetCuisine = targetCuisines.includes(cName) ? cName : "Continental";
+         
+         if (!menuTree[targetCuisine][subName]) menuTree[targetCuisine][subName] = [];
+         menuTree[targetCuisine][subName].push(p);
+         cuisineItemCounts[targetCuisine]++;
+      });
+      
+      function getSubcatIcon(name) {
+         const n = name.toLowerCase();
+         if (n.includes('starter') || n.includes('appetizer')) return 'ph-fire';
+         if (n.includes('bread') || n.includes('roti') || n.includes('naan')) return 'ph-bread';
+         if (n.includes('rice') || n.includes('biryani')) return 'ph-bowl-steam';
+         if (n.includes('soup')) return 'ph-bowl-food';
+         if (n.includes('main')) return 'ph-cooking-pot';
+         if (n.includes('noodle')) return 'ph-waves';
+         if (n.includes('pasta')) return 'ph-spiral';
+         if (n.includes('pizza')) return 'ph-pizza';
+         if (n.includes('dessert') || n.includes('sweet')) return 'ph-ice-cream';
+         if (n.includes('beverage') || n.includes('drink')) return 'ph-brandy';
+         if (n.includes('wrap') || n.includes('roll')) return 'ph-hamburger';
+         if (n.includes('bowl')) return 'ph-orange-slice';
+         return 'ph-star';
+      }
+
+      const columnsHtml = targetCuisines.map(cuisineName => {
+         // Proportional Flex Weight
+         const flexWeight = Math.max(12, cuisineItemCounts[cuisineName]);
+         
+         const subCats = Object.keys(menuTree[cuisineName]).sort();
+         if (subCats.length === 0) return `<div class="a0-cuisine-col" style="flex: ${flexWeight};"><h2 class="a0-cuisine-title">${escapeHtml(cuisineName)}</h2><div style="text-align: center; color: var(--muted); font-size: 24px;">Coming Soon</div></div>`;
+         
+         const subCatsHtml = subCats.map(subCat => {
+            const itemsHtml = menuTree[cuisineName][subCat].map(p => `
+               <div class="a0-item">
+                  ${p.image_url ? `<img src="${versionedAsset(p.image_url)}" class="a0-item-thumb">` : `<div class="a0-item-placeholder"><i class="ph-bold ph-fork-knife"></i></div>`}
+                  <div class="a0-item-details">
+                     <div class="a0-item-header">
+                        <span class="a0-item-name">${escapeHtml(p.name)}</span>
+                        <span class="a0-item-leader"></span>
+                        <span class="a0-item-price">${money(p.price, settings.currency_symbol)}</span>
+                     </div>
+                     ${p.description ? `<div class="a0-item-desc">${escapeHtml(p.description)}</div>` : ''}
+                  </div>
+               </div>
+            `).join("");
+            
+            return `<div class="a0-subcat-wrap"><h3 class="a0-subcat-title"><i class="ph-fill ${getSubcatIcon(subCat)}"></i> ${escapeHtml(subCat)}</h3>${itemsHtml}</div>`;
+         }).join("");
+         
+         return `<div class="a0-cuisine-col" style="flex: ${flexWeight};"><h2 class="a0-cuisine-title">${escapeHtml(cuisineName)}</h2><div class="a0-stack-wrapper">${subCatsHtml}</div></div>`;
+      }).join("");
+
+      const canvasHtml = `
+         <div class="a0-canvas" id="a0-print-target">
+            <header class="a0-header">
+               <img src="${versionedAsset("assets/images/website_logo.png")}" class="a0-logo" alt="Logo">
+            </header>
+            <div class="a0-grid">
+               ${columnsHtml}
+            </div>
+         </div>
+         <div class="a0-viewer-hints"><i class="ph-bold ph-hand-pointing"></i> Drag to pan · Scroll/Pinch to zoom</div>
+      `;
+
+      const modal = openAppModal({
+         title: "A0 Menu Board",
+         subtitle: "Drag to pan. Scroll to zoom. The layout is pixel-perfect.",
+         body: `<div class="a0-preview-viewport" id="a0-preview-viewport">${canvasHtml}</div>`,
+         actions: [
+            { label: "Close", icon: "ph-x", className: "btn-quiet", onClick: ({ close }) => close() },
+            { label: "Download PDF", icon: "ph-download-simple", className: "btn-primary", onClick: async ({ root, button }) => {
+               const originalElement = root.querySelector("#a0-print-target");
+               button.disabled = true;
+               const originalText = button.innerHTML;
+               button.innerHTML = `<i class="ph ph-spinner-gap ph-spin"></i><span>Generating PDF...</span>`;
+               
+               try {
+                  if (!window.html2pdf) {
+                     await new Promise((resolve) => {
+                        const script = document.createElement("script");
+                        script.src = "https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js";
+                        script.onload = resolve;
+                        document.head.appendChild(script);
+                     });
+                  }
+
+                  // 1. Clone the canvas and attach it visibly off-screen so browser renders images
+                  const clone = originalElement.cloneNode(true);
+                  clone.style.transform = "none";
+                  clone.style.position = "absolute";
+                  clone.style.top = "0";
+                  clone.style.left = "-9999px";
+                  clone.style.zIndex = "99999";
+                  document.body.appendChild(clone);
+                  
+                  // 2. Wait 400ms for all images to decode and render
+                  await new Promise(r => setTimeout(r, 400));
+
+                  const renderWidthPx = clone.scrollWidth;
+                  const renderHeightPx = clone.scrollHeight;
+                  
+                  const widthMm = renderWidthPx * 0.264583;
+                  const heightMm = renderHeightPx * 0.264583;
+
+                  const opt = {
+                     margin: 0,
+                     filename: `FourFlavours_Menu_Board.pdf`,
+                     image: { type: 'jpeg', quality: 1 },
+                     html2canvas: { scale: 2, useCORS: true, logging: false, backgroundColor: '#0c1a11' },
+                     jsPDF: { unit: 'mm', format: [widthMm, heightMm], orientation: widthMm > heightMm ? 'landscape' : 'portrait' }
+                  };
+                  
+                  await html2pdf().set(opt).from(clone).save();
+                  
+                  // 3. Cleanup the temporary clone
+                  document.body.removeChild(clone);
+               } catch (err) {
+                  console.error("PDF Generation failed:", err);
+                  showToast("Generation Error", "Failed to compile PDF.", "error");
+               } finally {
+                  button.disabled = false;
+                  button.innerHTML = originalText;
+               }
+            }}
+         ]
+      });
+
+      // PHYSICS ENGINE: Complete Pan & Zoom Architecture
+      const viewport = modal.root.querySelector("#a0-preview-viewport");
+      const canvas = modal.root.querySelector("#a0-print-target");
+      if (!viewport || !canvas) return;
+      
+      let scale = 0, translateX = 0, translateY = 0, isDragging = false, startX, startY;
+      
+      function fitToScreen() {
+         const vW = viewport.clientWidth;
+         const vH = viewport.clientHeight;
+         const cW = canvas.scrollWidth;
+         const cH = canvas.scrollHeight;
+         
+         const scaleX = vW / cW;
+         const scaleY = vH / cH;
+         scale = Math.min(scaleX, scaleY) * 0.95; // 95% perfect fit to view everything
+         
+         translateX = (vW - (cW * scale)) / 2;
+         translateY = (vH - (cH * scale)) / 2;
+         updateTransform();
+      }
+      
+      function updateTransform() {
+         canvas.style.transform = `translate(${translateX}px, ${translateY}px) scale(${scale})`;
+      }
+      
+      setTimeout(fitToScreen, 50);
+      window.addEventListener("resize", fitToScreen);
+
+      // Desktop Scroll Zoom
+      viewport.addEventListener("wheel", e => {
+         e.preventDefault();
+         const delta = e.deltaY * -0.002;
+         let newScale = Math.max(0.05, Math.min(scale * Math.exp(delta), 2));
+         
+         const rect = viewport.getBoundingClientRect();
+         const pointerX = e.clientX - rect.left;
+         const pointerY = e.clientY - rect.top;
+         
+         // Zoom into pointer
+         translateX = pointerX - (pointerX - translateX) * (newScale / scale);
+         translateY = pointerY - (pointerY - translateY) * (newScale / scale);
+         scale = newScale;
+         updateTransform();
+      }, { passive: false });
+
+      // Unified Mouse/Touch Pan Dragging
+      viewport.addEventListener("pointerdown", e => {
+         isDragging = true;
+         startX = e.clientX - translateX;
+         startY = e.clientY - translateY;
+         viewport.setPointerCapture(e.pointerId);
+      });
+      viewport.addEventListener("pointermove", e => {
+         if (!isDragging) return;
+         translateX = e.clientX - startX;
+         translateY = e.clientY - startY;
+         updateTransform();
+      });
+      viewport.addEventListener("pointerup", () => { isDragging = false; });
+
+      // Mobile Pinch to Zoom
+      let initialDistance = null;
+      let initialScale = null;
+      
+      viewport.addEventListener("touchstart", e => {
+         if (e.touches.length === 2) {
+             isDragging = false; 
+             initialDistance = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+             initialScale = scale;
+         }
+      }, { passive: false });
+      
+      viewport.addEventListener("touchmove", e => {
+         if (e.touches.length === 2 && initialDistance) {
+             e.preventDefault();
+             const currentDistance = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+             let newScale = Math.max(0.05, Math.min(initialScale * (currentDistance / initialDistance), 2));
+             
+             const rect = viewport.getBoundingClientRect();
+             const pointerX = rect.width / 2;
+             const pointerY = rect.height / 2;
+             
+             translateX = pointerX - (pointerX - translateX) * (newScale / scale);
+             translateY = pointerY - (pointerY - translateY) * (newScale / scale);
+             scale = newScale;
+             updateTransform();
+         }
+      }, { passive: false });
+      
+      viewport.addEventListener("touchend", e => { if (e.touches.length < 2) { initialDistance = null; initialScale = null; } });
+      
+      const originalClose = modal.close;
+      modal.close = () => { window.removeEventListener("resize", fitToScreen); originalClose(); };
+    }
+
     list.addEventListener("click", e => { 
       const editBtn = e.target.closest("[data-edit-product]"); 
       const delBtn = e.target.closest("[data-delete-product]");
@@ -1139,14 +1451,41 @@ async function renderAdminWorkspace(mount) {
         // REPEAT BUTTON LOGIC
         host.querySelectorAll(".admin-repeat-btn").forEach(btn => {
           btn.addEventListener("click", async () => {
+            window.__STAFF_MUTED_UNTIL = Date.now() + 3000;
             btn.disabled = true;
             btn.innerHTML = `<i class="ph ph-spinner-gap ph-spin"></i>`;
             try {
-              // Reuse the secure append RPC
-              await supabase.rpc('append_pos_order', { 
+              // Intelligent Merge Sync: Fetch existing items to prevent wiping the bill
+              const { data: existingItems } = await supabase.from("order_items").select("*").eq("order_id", latestOrder.id);
+              const mergedMap = new Map();
+              
+              if (existingItems) {
+                  existingItems.forEach(item => {
+                      mergedMap.set(item.product_id, {
+                          id: item.product_id, product_id: item.product_id,
+                          name: item.name_snapshot, name_snapshot: item.name_snapshot,
+                          price: item.unit_price, unit_price: item.unit_price, quantity: item.quantity
+                      });
+                  });
+              }
+              
+              const pId = btn.dataset.id;
+              if (mergedMap.has(pId)) {
+                  mergedMap.get(pId).quantity += 1;
+              } else {
+                  mergedMap.set(pId, { 
+                      id: pId, product_id: pId, 
+                      name: btn.dataset.name, name_snapshot: btn.dataset.name, 
+                      price: btn.dataset.price, unit_price: btn.dataset.price, quantity: 1 
+                  });
+              }
+              
+              const { error } = await supabase.rpc('sync_pos_order', { 
                   p_order_id: latestOrder.id, 
-                  p_items: [{ id: btn.dataset.id, name: btn.dataset.name, price: btn.dataset.price, quantity: 1 }] 
+                  p_items: Array.from(mergedMap.values()) 
               });
+              if (error) throw error;
+              
               showToast("Item Repeated", `${btn.dataset.name} added to Table ${table.table_no}`);
               renderManager(); // Refresh Admin drawer instantly
             } catch (err) {
@@ -1200,13 +1539,41 @@ async function renderAdminWorkspace(mount) {
 
            host.querySelectorAll(".admin-quick-add-btn").forEach(btn => {
               btn.addEventListener("click", async () => {
+                 window.__STAFF_MUTED_UNTIL = Date.now() + 3000;
                  btn.disabled = true;
                  btn.innerHTML = `<i class="ph ph-spinner-gap ph-spin"></i>`;
                  try {
-                    await supabase.rpc('append_pos_order', { 
+                    // Intelligent Merge Sync
+                    const { data: existingItems } = await supabase.from("order_items").select("*").eq("order_id", latestOrder.id);
+                    const mergedMap = new Map();
+                    
+                    if (existingItems) {
+                        existingItems.forEach(item => {
+                            mergedMap.set(item.product_id, {
+                                id: item.product_id, product_id: item.product_id,
+                                name: item.name_snapshot, name_snapshot: item.name_snapshot,
+                                price: item.unit_price, unit_price: item.unit_price, quantity: item.quantity
+                            });
+                        });
+                    }
+                    
+                    const pId = btn.dataset.quickAdd;
+                    if (mergedMap.has(pId)) {
+                        mergedMap.get(pId).quantity += 1;
+                    } else {
+                        mergedMap.set(pId, { 
+                            id: pId, product_id: pId, 
+                            name: btn.dataset.name, name_snapshot: btn.dataset.name, 
+                            price: btn.dataset.price, unit_price: btn.dataset.price, quantity: 1 
+                        });
+                    }
+                    
+                    const { error } = await supabase.rpc('sync_pos_order', { 
                         p_order_id: latestOrder.id, 
-                        p_items: [{ id: btn.dataset.quickAdd, name: btn.dataset.name, price: btn.dataset.price, quantity: 1 }] 
+                        p_items: Array.from(mergedMap.values()) 
                     });
+                    if (error) throw error;
+                    
                     showToast("Item Added", `${btn.dataset.name} sent to Table ${table.table_no}`);
                     renderManager(); // Refresh Admin drawer instantly
                  } catch (err) {
@@ -2183,10 +2550,15 @@ async function renderAdminWorkspace(mount) {
     );
   }
 
+  // Listen for the custom inbox event triggered by navigation.js
+  const adminAlertHandler = async () => {
+    if (section === "overview") renderOverview();
+  };
+  window.addEventListener("ff_admin_alert_received", adminAlertHandler);
+
   // --- LIVE MONITORING WEBSOCKET ---
   const realtimeChannel = supabase.channel('admin-live-updates')
     .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'orders' }, async payload => {
-      showToast("New Order Received", `Order #${payload.new.order_number} has been confirmed.`);
       if (section === "orders") renderOrders();
       else if (section === "overview") await reload();
     })
@@ -2217,6 +2589,7 @@ async function renderAdminWorkspace(mount) {
   // Cleanup the socket connection if the admin logs out or closes the workspace
   return () => {
     navCleanup?.();
+    window.removeEventListener("ff_admin_alert_received", adminAlertHandler);
     if (realtimeChannel) supabase.removeChannel(realtimeChannel);
   };
 }
