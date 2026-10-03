@@ -1,23 +1,33 @@
-const CACHE_NAME = 'four-flavours-v1';
+const CACHE_NAME = "four-flavours-v2";
 
-// Install event - skips waiting to ensure the latest version is always active immediately
-self.addEventListener('install', (event) => {
-  self.skipWaiting();
+// Do NOT cache everything blindly during install. 
+// We only cache the bare minimum to pass the PWA requirement.
+self.addEventListener("install", (event) => {
+  self.skipWaiting(); // Instantly activates the new service worker
+  event.waitUntil(
+    caches.open(CACHE_NAME).then((cache) => {
+      // It's safer to cache just the root to pass the PWA check.
+      // If you add files here, a single 404 will break the entire installation.
+      return cache.addAll(["/"]); 
+    }).catch(err => console.log("Cache bypass: ", err))
+  );
 });
 
-// Activate event - claims the clients immediately
-self.addEventListener('activate', (event) => {
-  event.waitUntil(clients.claim());
+self.addEventListener("activate", (event) => {
+  event.waitUntil(
+    caches.keys().then((keyList) => {
+      return Promise.all(
+        keyList.map((key) => {
+          if (key !== CACHE_NAME) return caches.delete(key);
+        })
+      );
+    })
+  );
+  self.clients.claim();
 });
 
-// Fetch event - THIS IS THE CRITICAL MISSING PIECE FOR PWA INSTALLATION.
-// We use a network-first pass-through strategy so we don't accidentally cache dynamic POS data.
-self.addEventListener('fetch', (event) => {
-  // Ignore API calls to Supabase, let them pass through normally
-  if (event.request.url.includes('supabase.co')) {
-    return;
-  }
-  
+// Chrome strictly requires a fetch handler to consider it a PWA
+self.addEventListener("fetch", (event) => {
   event.respondWith(
     fetch(event.request).catch(() => {
       return caches.match(event.request);

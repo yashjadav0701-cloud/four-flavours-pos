@@ -1446,8 +1446,10 @@ html, body {
 nav#admin-section-nav.admin-section-nav {
   position: fixed !important;
   bottom: 0 !important;
-  left: 0 !important;
+  left: 50% !important; /* Centers the dock */
+  transform: translateX(-50%) !important; /* Perfect centering alignment */
   width: 100% !important;
+  max-width: 560px !important; /* Caps the width so it doesn't stretch on PC */
   height: 58px !important; /* Slimmer, compact height */
   background: rgba(252, 252, 249, 0.95) !important; /* Premium Creamy Glass */
   backdrop-filter: blur(16px) !important;
@@ -1460,6 +1462,16 @@ nav#admin-section-nav.admin-section-nav {
   justify-content: space-around !important; 
   z-index: 9999 !important;
   box-shadow: 0 -4px 24px rgba(18, 34, 22, 0.04) !important; 
+}
+
+/* Enhances the desktop/tablet view into a premium floating dock */
+@media (min-width: 600px) {
+  nav#admin-section-nav.admin-section-nav {
+    bottom: 16px !important;
+    border-radius: 20px !important;
+    border: 1px solid rgba(0,0,0,0.06) !important;
+    box-shadow: 0 12px 32px rgba(18, 34, 22, 0.08) !important; 
+  }
 }
 
 nav#admin-section-nav.admin-section-nav button {
@@ -1673,7 +1685,7 @@ nav#admin-section-nav.admin-section-nav button.active span {
   background: var(--sage-100);
   overflow: hidden;
   border: 1px solid var(--line);
-  transition: width 0.35s cubic-bezier(0.2, 0.8, 0.2, 1), background 0.35s, border-color 0.35s;
+  transition: width 0.5s cubic-bezier(0.2, 0.8, 0.2, 1), background 0.5s, border-color 0.5s;
   position: relative;
 }
 
@@ -1702,12 +1714,12 @@ nav#admin-section-nav.admin-section-nav button.active span {
   left: 32px;
   width: 32px;
   text-align: center;
-  font-size: 0.9rem;
-  font-weight: 900;
+  font-size: 1.00 rem; /* Significantly larger, highly legible number */
+  font-weight: 700;
   color: var(--forest-950);
   opacity: 0;
-  transform: translateX(12px); /* Starts slightly to the right to glide in */
-  transition: all 0.35s cubic-bezier(0.2, 0.8, 0.2, 1);
+  transform: translateX(12px); /* Starts slightly to the right */
+  transition: all 0.5s cubic-bezier(0.2, 0.8, 0.2, 1);
   user-select: none;
   z-index: 1;
 }
@@ -1720,13 +1732,13 @@ nav#admin-section-nav.admin-section-nav button.active span {
 .dec-btn {
   position: absolute;
   left: 0;
-  transform: translateX(16px); /* Starts hidden behind the expanding right edge */
+  transform: translateX(16px); /* Starts hidden behind expanding right edge */
   opacity: 0;
-  transition: all 0.35s cubic-bezier(0.2, 0.8, 0.2, 1);
+  transition: all 0.5s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
 .premium-qty-wrapper.is-active .dec-btn {
-  transform: translateX(0); /* Glides smoothly to the far left edge */
+  transform: translateX(0); /* Glides to far left edge smoothly */
   opacity: 1;
   background: var(--forest-900);
   color: #fff;
@@ -1747,11 +1759,11 @@ nav#admin-section-nav.admin-section-nav button.active span {
 }
 
 .qty-pulse {
-  animation: premium-pulse 250ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  animation: premium-pulse 300ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 @keyframes premium-pulse {
   0% { transform: scale(1); }
-  50% { transform: scale(1.08); }
+  50% { transform: scale(1.06); }
   100% { transform: scale(1); }
 }
 
@@ -1943,9 +1955,9 @@ nav#admin-section-nav.admin-section-nav button.active span {
 .detail-action-container {
   margin-top: 12px;
   display: flex;
-  height: 56px;
+  height: 44px; /* Sleek, reduced premium height */
   gap: 0;
-  transition: gap 0.35s cubic-bezier(0.2, 0.8, 0.2, 1); /* Liquid deceleration curve */
+  transition: gap 0.5s cubic-bezier(0.2, 0.8, 0.2, 1); /* Smooth, elegant transition */
 }
 
 .detail-action-container.is-active {
@@ -1953,18 +1965,18 @@ nav#admin-section-nav.admin-section-nav button.active span {
 }
 
 .detail-add-btn {
-  height: 56px !important;
-  border-radius: 18px !important;
-  font-size: 1.15rem !important;
-  box-shadow: 0 8px 24px rgba(25, 50, 28, 0.15) !important;
-  flex: 1 1 100%; /* Takes up 100% of the space initially */
+  height: 44px !important;
+  border-radius: 14px !important;
+  font-size: 1rem !important;
+  box-shadow: 0 6px 20px rgba(25, 50, 28, 0.12) !important;
+  flex: 1 1 100%;
   overflow: hidden;
   white-space: nowrap;
-  transition: all 0.35s cubic-bezier(0.2, 0.8, 0.2, 1);
+  transition: all 0.5s cubic-bezier(0.2, 0.8, 0.2, 1);
   opacity: 1;
 }
 
-/* WIPE LEFT EFFECT: Shrinks into oblivion */
+/* WIPE LEFT EFFECT: Shrinks smoothly into oblivion */
 .detail-action-container.is-active .detail-add-btn {
   flex: 0 0 0%;
   opacity: 0;
@@ -1978,20 +1990,20 @@ nav#admin-section-nav.admin-section-nav button.active span {
   flex: 0 0 0%;
   opacity: 0;
   overflow: hidden;
-  transition: all 0.35s cubic-bezier(0.2, 0.8, 0.2, 1);
-  border: 1px solid var(--sage-300); /* Matched precisely to the product card border */
-  border-radius: 18px;
-  padding: 0; /* Stripped padding forces flush edges */
+  transition: all 0.5s cubic-bezier(0.2, 0.8, 0.2, 1);
+  border: 1px solid var(--sage-300);
+  border-radius: 14px;
+  padding: 0;
   background: var(--paper);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  height: 56px;
+  height: 44px; /* Matched sleek height */
 }
 
 /* EXPANDS TO TAKE LEFT SPACE */
 .detail-action-container.is-active .detail-qty-ui {
-  flex: 0 0 140px; /* Slightly wider to accommodate flush buttons */
+  flex: 0 0 120px;
   opacity: 1;
   padding: 0;
 }
@@ -2001,19 +2013,19 @@ nav#admin-section-nav.admin-section-nav button.active span {
   opacity: 0;
   overflow: hidden;
   white-space: nowrap;
-  transition: all 0.35s cubic-bezier(0.2, 0.8, 0.2, 1);
+  transition: all 0.5s cubic-bezier(0.2, 0.8, 0.2, 1);
   background: var(--forest-900);
   color: #fff;
-  border-radius: 18px;
+  border-radius: 14px;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  font-size: 1.15rem;
+  gap: 6px;
+  font-size: 1rem;
   font-weight: 800;
   padding: 0;
   border: none;
-  box-shadow: 0 8px 24px rgba(25, 50, 28, 0.15);
+  box-shadow: 0 6px 20px rgba(25, 50, 28, 0.12);
   cursor: pointer;
 }
 
@@ -2021,22 +2033,22 @@ nav#admin-section-nav.admin-section-nav button.active span {
 .detail-action-container.is-active .detail-done-btn {
   flex: 1 1 auto;
   opacity: 1;
-  padding: 0 20px;
+  padding: 0 16px;
 }
 
 .detail-qty-btn {
-  width: 44px; /* Proportionally matched to the flush container */
-  height: 100%; /* Stretches vertically to perfectly fill the space */
+  width: 36px;
+  height: 100%;
   display: grid;
   place-items: center;
-  background: var(--forest-900); /* Matched to product card active state */
-  color: #fff;
+  background: var(--forest-900);
   border: none;
-  border-radius: 0; /* Flush against the clipped outer corners */
-  font-size: 1.2rem;
+  border-radius: 0;
+  color: #fff;
+  font-size: 1.1rem;
   cursor: pointer;
   transition: background 0.2s ease;
-  flex-shrink: 0; 
+  flex-shrink: 0;
 }
 
 .detail-qty-btn:active {
@@ -2044,11 +2056,13 @@ nav#admin-section-nav.admin-section-nav button.active span {
 }
 
 #detail-qty-val {
-  font-size: 1.3rem;
-  font-weight: 900;
+  font-size: 1.35rem; /* Massively increased for high legibility */
+  font-weight: 700;
   color: var(--forest-950);
-  flex: 1; /* Pushes the + and - buttons to the extreme edges */
+  flex: 1;
   text-align: center;
+  line-height: 1; /* Prevents vertical shifting */
+  transform: translateY(-1px); /* Perfect optical center alignment */
 }
 
 /* 2. Full-Bleed Edge-to-Edge Product Images */
