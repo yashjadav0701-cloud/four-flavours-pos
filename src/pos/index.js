@@ -487,11 +487,93 @@ export async function render({ mount }) {
       const add = event.target.closest("[data-product-add]");
       const inc = event.target.closest("[data-product-inc]");
       const dec = event.target.closest("[data-product-dec]");
+      const card = event.target.closest("[data-product-card]"); // Capture the card click
 
       if (add) { const product = products.find(item => item.id === add.dataset.productAdd); if (!product) return; state.addProduct(product); animateProductControl(add); return; }
       if (inc) { state.increment(inc.dataset.productInc); animateProductControl(inc); return; }
       if (dec) { state.decrement(dec.dataset.productDec); animateProductControl(dec); }
+
+      // OPEN OUTSTANDING PRODUCT PAGE: Triggered if user taps the card but NOT the quantity buttons
+      if (card && !event.target.closest(".premium-qty-wrapper")) {
+        const product = products.find(item => item.id === card.dataset.productCard);
+        if (product) openProductDetailModal(product);
+      }
     });
+
+    function openProductDetailModal(product) {
+      let currentQty = state.getState().items.find(i => i.id === product.id)?.quantity || 0;
+
+      const modalBody = `
+        <div class="premium-product-detail">
+          <div class="detail-media">
+            ${product.image_url ? `<img src="${versionedAsset(product.image_url)}" alt="">` : `<div class="product-placeholder"><i class="ph ph-fork-knife"></i></div>`}
+            <span class="veg-mark" title="Vegetarian"><span></span></span>
+          </div>
+          <div class="detail-content">
+            <div class="detail-price-row">
+              <span class="detail-price-label">Price</span>
+              <span class="detail-price-value">${money(product.price, settings.currency_symbol)}</span>
+            </div>
+            ${product.description ? `<p class="detail-description">${escapeHtml(product.description)}</p>` : ''}
+            
+            <div class="detail-action-container ${currentQty > 0 ? 'is-active' : ''}" id="detail-action-wrap">
+              <button class="btn btn-primary detail-add-btn" id="detail-main-btn">
+                <i class="ph-bold ph-plus"></i> Add to Order
+              </button>
+              
+              <div class="detail-qty-ui" id="detail-qty-ui">
+                <button class="detail-qty-btn" id="detail-dec"><i class="ph-bold ph-minus"></i></button>
+                <span id="detail-qty-val">${currentQty}</span>
+                <button class="detail-qty-btn" id="detail-inc"><i class="ph-bold ph-plus"></i></button>
+              </div>
+
+              <button class="detail-done-btn" id="detail-done-btn">
+                Done <i class="ph-bold ph-check"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+      `;
+
+      const modal = openAppModal({
+        title: escapeHtml(product.name),
+        subtitle: escapeHtml(product.category),
+        body: modalBody,
+        actions: [] /* Actions array cleared to remove the Done Browsing button */
+      });
+
+      const decBtn = modal.root.querySelector("#detail-dec");
+      const incBtn = modal.root.querySelector("#detail-inc");
+      const mainBtn = modal.root.querySelector("#detail-main-btn");
+      const qtyVal = modal.root.querySelector("#detail-qty-val");
+      const actionWrap = modal.root.querySelector("#detail-action-wrap");
+      const doneBtn = modal.root.querySelector("#detail-done-btn");
+
+      const updateUI = () => {
+        const qty = state.getState().items.find(i => i.id === product.id)?.quantity || 0;
+        qtyVal.textContent = qty;
+        
+        // Triggers the CSS liquid wipe transition
+        if (qty > 0) {
+          actionWrap.classList.add("is-active");
+        } else {
+          actionWrap.classList.remove("is-active");
+        }
+        
+        // Force the background grid and footer cart to instantly sync with modal interactions!
+        renderProductQuantities();
+        renderActionBar();
+      };
+
+      mainBtn.addEventListener("click", () => { state.addProduct(product); updateUI(); });
+      incBtn.addEventListener("click", () => { state.increment(product.id); updateUI(); });
+      decBtn.addEventListener("click", () => { state.decrement(product.id); updateUI(); });
+      doneBtn.addEventListener("click", () => { modal.close(); });
+      
+      const unsubscribe = state.subscribe(updateUI);
+      const originalClose = modal.close;
+      modal.close = () => { unsubscribe(); originalClose(); };
+    }
 
     const scroller = area.querySelector("#pos-product-container");
     if (scroller) {

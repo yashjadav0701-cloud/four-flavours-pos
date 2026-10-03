@@ -1,3 +1,12 @@
+/* INJECT PHOSPHOR FILL FONT DIRECTLY */
+@font-face {
+  font-family: "Phosphor-Solid";
+  src: url("https://unpkg.com/@phosphor-icons/web@2.1.1/src/fill/Phosphor-Fill.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+
 :root {
   --forest-950:#122216; --forest-900:#19321c; --forest-850:#203d23; --forest-800:#28482b;
   --forest-700:#365b38; --forest-600:#4c6e4b; --forest-500:#65845f; --forest-400:#8da27f;
@@ -352,7 +361,11 @@ button,input,select,textarea{font:inherit}button{border:0}button:disabled{cursor
 .session-scroll-container{height:min(62vh,560px);display:grid;align-content:start;gap:8px}.session-card{padding:11px;border:1px solid var(--line);border-radius:13px;background:var(--cream-50)}.session-card-head{display:flex;align-items:center;justify-content:space-between;gap:8px}.session-card-head h3{margin:4px 0 0;font-size:.88rem}.session-summary{display:flex;gap:10px;margin-top:10px}.session-summary>div{min-width:72px;padding:7px;border-radius:9px;background:#fff;border:1px solid var(--line)}.session-summary strong,.session-summary span{display:block}.session-summary strong{font-size:.82rem}.session-summary span{margin-top:2px;color:var(--muted);font-size:.58rem}.session-actions{display:flex;justify-content:flex-end;gap:6px;margin-top:8px}
 
 /* Access */
-.access-screen{background:radial-gradient(circle at 50% 15%,rgba(201,164,90,.09),transparent 34%),var(--cream-100)}.access-screen.dark-access{background:var(--forest-950)}.access-card{width:min(100%,460px);padding:28px;border:1px solid var(--line);border-radius:25px;background:var(--paper);box-shadow:var(--shadow-strong)}.dark-access .access-card{border-color:rgba(255,255,255,.1);background:var(--forest-900);color:#fff}.access-brand{display:flex;align-items:center;gap:11px}.access-logo{width:60px;height:60px;object-fit:cover;border-radius:17px;background:#fff}.access-brand strong{display:block;margin-top:3px;color:var(--forest-900);font-size:1rem}.dark-access .access-brand strong{color:#fff}.access-card h1{margin:19px 0 7px;font-size:1.5rem;letter-spacing:-.03em}.access-copy,.access-card>p{margin:0 0 18px;color:var(--muted);font-size:.76rem;line-height:1.55}.dark-access .access-copy{color:#aebaae}.pin-input{letter-spacing:.32em;font-weight:900}.access-status{min-height:18px;color:var(--muted);font-size:.67rem}
+.access-screen{background:radial-gradient(circle at 50% 15%,rgba(201,164,90,.09),transparent 34%),var(--cream-100)}.access-screen.dark-access{background:var(--forest-950)}.access-card{width:min(100%,460px);padding:28px;border:1px solid var(--line);border-radius:25px;background:var(--paper);box-shadow:var(--shadow-strong)}.dark-access .access-card{border-color:rgba(255,255,255,.1);background:var(--forest-900);color:#fff}.access-brand{display:flex;align-items:center;gap:11px}.access-logo{width:60px;height:60px;object-fit:cover;border-radius:17px;background:#fff}.access-brand strong{display:block;margin-top:3px;color:var(--forest-900);font-size:1rem}.dark-access .access-brand strong{color:#fff}.access-card h1{margin:19px 0 7px;font-size:1.5rem;letter-spacing:-.03em}.access-copy,.access-card>p{margin:0 0 18px;color:var(--muted);font-size:.76rem;line-height:1.55}.dark-access .access-copy{color:#aebaae}.pin-input {
+  letter-spacing: .32em;
+  font-weight: 900;
+  -webkit-text-security: disc; /* Instantly transforms typed numbers into secure dots/asterisks! */
+}.access-status{min-height:18px;color:var(--muted);font-size:.67rem}
 
 /* Fixes the Access Screen Button Alignment */
 .access-card form { display: flex; flex-direction: column; gap: 14px; }
@@ -1469,7 +1482,7 @@ nav#admin-section-nav.admin-section-nav button {
 /* Base Inactive State (Olive Green, Outlined) */
 nav#admin-section-nav.admin-section-nav button i {
   font-family: "Phosphor", sans-serif !important; /* Enforces outline style */
-  font-size: 24px !important; /* Scaled down slightly */
+  font-size: 28px !important; /* Noticeably larger icons */
   color: var(--forest-600) !important; /* Olive Green */
   transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), color 0.25s ease !important;
   font-weight: normal !important; 
@@ -1478,25 +1491,25 @@ nav#admin-section-nav.admin-section-nav button i {
 
 nav#admin-section-nav.admin-section-nav button span {
   display: block !important;
-  font-size: 10.5px !important; /* Perfectly legible but compact */
+  font-size: 11px !important; /* Bumped slightly to match the larger icons */
   font-weight: 600 !important;
   color: var(--forest-600) !important;
   transition: color 0.25s ease, font-weight 0.25s ease !important;
 }
 
-/* Active Focus State (Pastel Green Pill + YouTube Solid Fill Icon) */
+/* Active Focus State (No Pill + YouTube Solid Fill Icon) */
 nav#admin-section-nav.admin-section-nav button.active {
-  background: var(--sage-200) !important; /* Soft pastel green pill */
-  border-radius: 14px !important;
-  height: 46px !important; /* Slimmer pill fits perfectly inside the 58px bar */
-  margin: 6px 2px !important;
+  background: transparent !important; /* Completely removes the container pill */
+  border-radius: 0 !important;
+  height: 100% !important; 
+  margin: 0 !important;
 }
 
 nav#admin-section-nav.admin-section-nav button.active i {
-  font-family: "Phosphor-Fill", "Phosphor" !important; /* THE YOUTUBE MAGIC: Morphs into Solid Fill */
+  font-family: "Phosphor-Solid", "Phosphor Fill", "Phosphor" !important; /* THE YOUTUBE MAGIC: Forces the custom Solid font we injected */
   color: var(--forest-950) !important; /* Dark, highly visible contrast */
-  font-size: 24px !important; 
-  transform: scale(1.1) translateY(-1px) !important; /* Gentle pop animation */
+  font-size: 28px !important; 
+  transform: scale(1.15) translateY(-2px) !important; /* More pronounced pop animation without the pill */
 }
 
 nav#admin-section-nav.admin-section-nav button.active span {
@@ -1649,7 +1662,7 @@ nav#admin-section-nav.admin-section-nav button.active span {
   transform: scale(1.12) !important;
 }
 
-/* --- Premium Expanding Qty Button --- */
+/* --- Premium Expanding Qty Button (Smooth Wipe Left) --- */
 .premium-qty-wrapper {
   display: inline-flex;
   align-items: center;
@@ -1660,7 +1673,7 @@ nav#admin-section-nav.admin-section-nav button.active span {
   background: var(--sage-100);
   overflow: hidden;
   border: 1px solid var(--line);
-  transition: width 0.35s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.3s, border-color 0.3s;
+  transition: width 0.35s cubic-bezier(0.2, 0.8, 0.2, 1), background 0.35s, border-color 0.35s;
   position: relative;
 }
 
@@ -1678,7 +1691,7 @@ nav#admin-section-nav.admin-section-nav button.active span {
   background: transparent;
   color: var(--forest-900);
   flex-shrink: 0;
-  transition: all 0.3s ease;
+  transition: background 0.2s ease, color 0.2s ease;
   border-radius: 0;
   z-index: 2;
   cursor: pointer;
@@ -1689,29 +1702,31 @@ nav#admin-section-nav.admin-section-nav button.active span {
   left: 32px;
   width: 32px;
   text-align: center;
-  font-size: 0.85rem;
+  font-size: 0.9rem;
   font-weight: 900;
-  color: var(--forest-900);
+  color: var(--forest-950);
   opacity: 0;
-  transition: opacity 0.3s ease, transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-  transform: scale(0.5);
+  transform: translateX(12px); /* Starts slightly to the right to glide in */
+  transition: all 0.35s cubic-bezier(0.2, 0.8, 0.2, 1);
   user-select: none;
   z-index: 1;
 }
 
 .premium-qty-wrapper.is-active .premium-qty-value {
   opacity: 1;
-  transform: scale(1);
+  transform: translateX(0); /* Glides into perfect center */
 }
 
 .dec-btn {
   position: absolute;
   left: 0;
-  transform: translateX(-100%) rotate(-180deg);
+  transform: translateX(16px); /* Starts hidden behind the expanding right edge */
   opacity: 0;
+  transition: all 0.35s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
+
 .premium-qty-wrapper.is-active .dec-btn {
-  transform: translateX(0) rotate(0);
+  transform: translateX(0); /* Glides smoothly to the far left edge */
   opacity: 1;
   background: var(--forest-900);
   color: #fff;
@@ -1720,13 +1735,13 @@ nav#admin-section-nav.admin-section-nav button.active span {
 .inc-btn {
   position: absolute;
   right: 0;
-  border-radius: 9px;
 }
+
 .premium-qty-wrapper.is-active .inc-btn {
   background: var(--forest-900);
   color: #fff;
-  border-radius: 0;
 }
+
 .premium-qty-wrapper:not(.is-active):hover .inc-btn {
   background: var(--sage-200);
 }
@@ -1847,6 +1862,194 @@ nav#admin-section-nav.admin-section-nav button.active span {
    ========================================= */
 
 /* Legacy Admin Nav Block Destroyed to prevent conflicts */
+
+/* =========================================
+   PREMIUM PRODUCT DETAIL MODAL
+   ========================================= */
+.premium-product-detail {
+  margin: -15px -17px; /* Breaks out of the default modal padding for edge-to-edge perfection */
+  display: flex;
+  flex-direction: column;
+}
+
+.detail-media {
+  position: relative;
+  width: 100%;
+  height: 240px; /* Fixed height strictly prevents the modal from scrolling */
+  background: var(--cream-100);
+  overflow: hidden;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+@media (min-width: 720px) {
+  .detail-media { 
+    height: 300px; /* Slightly taller fixed container for Desktop/Tablet */
+  } 
+}
+
+.detail-media img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain; /* Guarantees the full image is visible with zero cutouts */
+  background: transparent;
+}
+.detail-media .veg-mark {
+  top: 16px;
+  right: 16px;
+  transform: scale(1.2); /* Slightly larger for emphasis on the detail page */
+}
+
+.detail-content {
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.detail-price-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  background: var(--sage-100);
+  border-radius: 16px;
+  border: 1px solid var(--sage-200);
+}
+
+.detail-price-label {
+  font-size: 0.95rem;
+  font-weight: 800;
+  color: var(--forest-700);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.detail-price-value {
+  font-size: 1.6rem;
+  font-weight: 900;
+  color: var(--forest-950);
+}
+
+.detail-description {
+  font-size: 1.05rem;
+  line-height: 1.65;
+  color: var(--muted);
+  margin: 0;
+}
+
+.detail-action-container {
+  margin-top: 12px;
+  display: flex;
+  height: 56px;
+  gap: 0;
+  transition: gap 0.35s cubic-bezier(0.2, 0.8, 0.2, 1); /* Liquid deceleration curve */
+}
+
+.detail-action-container.is-active {
+  gap: 12px;
+}
+
+.detail-add-btn {
+  height: 56px !important;
+  border-radius: 18px !important;
+  font-size: 1.15rem !important;
+  box-shadow: 0 8px 24px rgba(25, 50, 28, 0.15) !important;
+  flex: 1 1 100%; /* Takes up 100% of the space initially */
+  overflow: hidden;
+  white-space: nowrap;
+  transition: all 0.35s cubic-bezier(0.2, 0.8, 0.2, 1);
+  opacity: 1;
+}
+
+/* WIPE LEFT EFFECT: Shrinks into oblivion */
+.detail-action-container.is-active .detail-add-btn {
+  flex: 0 0 0%;
+  opacity: 0;
+  padding: 0 !important;
+  margin: 0 !important;
+  border-width: 0 !important;
+  min-width: 0 !important;
+}
+
+.detail-qty-ui {
+  flex: 0 0 0%;
+  opacity: 0;
+  overflow: hidden;
+  transition: all 0.35s cubic-bezier(0.2, 0.8, 0.2, 1);
+  border: 1px solid var(--sage-300); /* Matched precisely to the product card border */
+  border-radius: 18px;
+  padding: 0; /* Stripped padding forces flush edges */
+  background: var(--paper);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 56px;
+}
+
+/* EXPANDS TO TAKE LEFT SPACE */
+.detail-action-container.is-active .detail-qty-ui {
+  flex: 0 0 140px; /* Slightly wider to accommodate flush buttons */
+  opacity: 1;
+  padding: 0;
+}
+
+.detail-done-btn {
+  flex: 0 0 0%;
+  opacity: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  transition: all 0.35s cubic-bezier(0.2, 0.8, 0.2, 1);
+  background: var(--forest-900);
+  color: #fff;
+  border-radius: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 1.15rem;
+  font-weight: 800;
+  padding: 0;
+  border: none;
+  box-shadow: 0 8px 24px rgba(25, 50, 28, 0.15);
+  cursor: pointer;
+}
+
+/* EXPANDS TO TAKE REMAINING RIGHT SPACE */
+.detail-action-container.is-active .detail-done-btn {
+  flex: 1 1 auto;
+  opacity: 1;
+  padding: 0 20px;
+}
+
+.detail-qty-btn {
+  width: 44px; /* Proportionally matched to the flush container */
+  height: 100%; /* Stretches vertically to perfectly fill the space */
+  display: grid;
+  place-items: center;
+  background: var(--forest-900); /* Matched to product card active state */
+  color: #fff;
+  border: none;
+  border-radius: 0; /* Flush against the clipped outer corners */
+  font-size: 1.2rem;
+  cursor: pointer;
+  transition: background 0.2s ease;
+  flex-shrink: 0; 
+}
+
+.detail-qty-btn:active {
+  background: var(--forest-800);
+}
+
+#detail-qty-val {
+  font-size: 1.3rem;
+  font-weight: 900;
+  color: var(--forest-950);
+  flex: 1; /* Pushes the + and - buttons to the extreme edges */
+  text-align: center;
+}
 
 /* 2. Full-Bleed Edge-to-Edge Product Images */
 .pos-product-media {
