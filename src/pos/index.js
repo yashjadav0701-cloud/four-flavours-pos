@@ -866,17 +866,19 @@ export async function render({ mount }) {
          .limit(1)
          .maybeSingle();
 
-      // AUTO-RESET: If the session was closed, violently wipe local storage and force a refresh!
+      // AUTO-RESET: If the session was closed, safely wipe local storage.
+      // CRITICAL FIX: Only force the page reload if it is a CUSTOMER device!
       if (activeSession && activeSession.status === "closed") {
-         localStorage.removeItem(`fourflavours.session.${current_state.tableId}`);
-         customerSessionToken = null;
-         
-         // If they are on the Thank You screen, leave them there. 
-         // If they are viewing the old tab, force a hard reload to clear the UI.
-         if (!document.querySelector(".thank-you-screen")) {
-            window.location.reload();
+         if (isCustomerMode) {
+             localStorage.removeItem(`fourflavours.session.${current_state.tableId}`);
+             customerSessionToken = null;
+             
+             // If they are viewing the old tab, force a hard reload to clear the UI.
+             if (!document.querySelector(".thank-you-screen")) {
+                window.location.reload();
+             }
          }
-         return;
+         return; // Safely halt the sync loop for staff without reloading their page
       }
 
       if (activeSession && ["open", "bill_requested", "bill_ready"].includes(activeSession.status)) {
