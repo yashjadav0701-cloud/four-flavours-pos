@@ -156,11 +156,21 @@ export async function render({ mount }) {
 
       <main class="pos-content">
         ${isCustomerMode ? '' : `
-          <section class="pos-toolbar-row">
-            <button class="pos-toolbar-pill active" data-order-type="dine_in"><i class="ph-bold ph-armchair"></i><span>Dine-in</span></button>
-            <button class="pos-toolbar-pill" data-order-type="takeaway"><i class="ph-bold ph-shopping-bag"></i><span>Takeaway</span></button>
-            <div class="pos-toolbar-pill" id="pos-table-wrap">
-              <span class="selected-text" id="pos-table-display"><i class="ph-bold ph-armchair"></i><span>Table</span><i class="ph ph-caret-down"></i></span>
+          <section class="pos-toolbar-row" style="display: flex; justify-content: center; width: 100%; gap: 8px; margin-bottom: 16px; flex-wrap: nowrap; overflow-x: auto;">
+            <button class="pos-toolbar-pill active" data-order-type="dine_in" style="height: 44px; padding: 0 14px; font-size: 14px; font-weight: 800; gap: 7px; border-radius: 12px; border-width: 2px; white-space: nowrap; flex-shrink: 0;">
+              <i class="ph-bold ph-armchair" style="font-size: 18px; line-height: 1;"></i>
+              <span style="white-space: nowrap;">Dine-in</span>
+            </button>
+            <button class="pos-toolbar-pill" data-order-type="takeaway" style="height: 44px; padding: 0 14px; font-size: 14px; font-weight: 800; gap: 7px; border-radius: 12px; border: 2px solid #0f2d1e; color: #061a10; white-space: nowrap; flex-shrink: 0;">
+              <i class="ph-bold ph-shopping-bag" style="font-size: 18px; color: #061a10; line-height: 1;"></i>
+              <span style="white-space: nowrap;">Takeaway</span>
+            </button>
+            <div class="pos-toolbar-pill" id="pos-table-wrap" style="height: 44px; padding: 0 14px; font-size: 14px; font-weight: 800; gap: 7px; border-radius: 12px; border: 2px solid #0f2d1e; color: #061a10; white-space: nowrap; flex-shrink: 0;">
+              <span class="selected-text" id="pos-table-display" style="display: inline-flex; align-items: center; gap: 7px; font-size: 14px; font-weight: 800; color: #061a10; white-space: nowrap;">
+                <i class="ph-bold ph-armchair" style="font-size: 18px; color: #061a10; line-height: 1;"></i>
+                <span style="white-space: nowrap;">Table</span>
+                <i class="ph-bold ph-caret-down" style="font-size: 16px; color: #061a10; line-height: 1;"></i>
+              </span>
             </div>
           </section>
         `}
@@ -205,45 +215,56 @@ export async function render({ mount }) {
     const tableWrapBtn = mount.querySelector("#pos-table-wrap");
     let autoOpenReview = false;
 
-    tableWrapBtn.addEventListener("click", async (e) => {
+    tableWrapBtn.addEventListener("click", (e) => {
       if (state.getState().orderType === "takeaway") return;
       
       autoOpenReview = e.isTrusted === false || window._autoReviewPending;
       window._autoReviewPending = false;
 
-      // FETCH LIVE STATUS: Only show tables that are currently free!
-      const { data: activeSessions } = await supabase.from("dining_sessions").select("table_id").in("status", ["open", "bill_requested", "bill_ready"]);
-      const occupiedIds = new Set((activeSessions || []).map(s => s.table_id));
-      const freeTables = tables.filter(t => !occupiedIds.has(t.id));
-      
+      // 1. OPEN INSTANTLY: Give the user immediate tactile feedback without waiting for the DB
       const modal = openAppModal({
         title: "Select Table",
         subtitle: "Assign a table for this dine-in session. Occupied tables are hidden.",
-        body: `<div class="table-selection-list" style="max-height: 50vh; overflow-y: auto; margin: -10px -24px;">
-          ${freeTables.length ? freeTables.map(t => `
-            <button class="btn btn-quiet table-select-btn" data-table-id="${t.id}" style="width: 100%; border-radius: 0; justify-content: flex-start; padding: 18px 24px; font-size: 16px; border-bottom: 1px solid var(--line);">
+        body: `<div id="table-selection-host" style="max-height: 50vh; overflow-y: auto; margin: -10px -24px;"><div class="empty-state"><i class="ph ph-spinner-gap ph-spin"></i><span>Finding free tables...</span></div></div>`,
+        actions: [{ label: "Cancel", icon: "ph-x", className: "btn-quiet", onClick: (ctx) => { autoOpenReview = false; ctx.close(); } }]
+      });
+
+      // 2. FETCH IN BACKGROUND: Now query the database asynchronously
+      supabase.from("dining_sessions").select("table_id").in("status", ["open", "bill_requested", "bill_ready"])
+        .then(({ data: activeSessions }) => {
+          const occupiedIds = new Set((activeSessions || []).map(s => s.table_id));
+          const freeTables = tables.filter(t => !occupiedIds.has(t.id));
+          
+          const host = modal.root.querySelector("#table-selection-host");
+          if (!host) return; // In case they closed it before it loaded
+
+          host.innerHTML = freeTables.length ? freeTables.map(t => `
+            <button class="btn btn-quiet table-select-btn" data-table-id="${t.id}" style="width: 100%; border-radius: 0; justify-content: flex-start; padding: 18px 24px; font-size: 16px; border-bottom: 1px solid var(--line); transition: background 0.15s;">
               <i class="ph-bold ph-armchair" style="color: var(--forest-600); margin-right: 14px; font-size: 20px;"></i>
               <strong style="color: var(--forest-950);">Table ${escapeHtml(t.table_no)}</strong>
               <span style="margin-left: auto; font-size: 13px; font-weight: 700; color: var(--muted);">${t.capacity} seats</span>
             </button>
-          `).join("") : `<div class="empty-state"><i class="ph-bold ph-armchair"></i><strong>No free tables</strong><span>All tables are currently occupied.</span></div>`}
-        </div>`,
-        actions: [{ label: "Cancel", icon: "ph-x", className: "btn-quiet", onClick: (ctx) => { autoOpenReview = false; ctx.close(); } }]
-      });
+          `).join("") : `<div class="empty-state"><i class="ph-bold ph-armchair"></i><strong>No free tables</strong><span>All tables are currently occupied.</span></div>`;
 
-      modal.root.querySelectorAll(".table-select-btn").forEach(btn => {
-        btn.addEventListener("click", () => {
-          const table = tables.find(t => t.id === btn.dataset.tableId) ?? null;
-          state.setTable(table);
-          tableDisplay.textContent = table ? `Table ${table.table_no}` : "Table";
-          modal.close();
-          
-          if (autoOpenReview && state.getState().items.length > 0) {
-            autoOpenReview = false;
-            openReview();
-          }
+          host.querySelectorAll(".table-select-btn").forEach(btn => {
+            btn.addEventListener("click", () => {
+              const table = tables.find(t => t.id === btn.dataset.tableId) ?? null;
+              state.setTable(table);
+              tableDisplay.textContent = table ? `Table ${table.table_no}` : "Table";
+              modal.close();
+              
+              if (autoOpenReview && state.getState().items.length > 0) {
+                autoOpenReview = false;
+                openReview();
+              }
+            });
+          });
+        })
+        .catch(err => {
+          console.error(err);
+          const host = modal.root.querySelector("#table-selection-host");
+          if (host) host.innerHTML = `<div class="empty-state"><i class="ph ph-warning-circle"></i><strong>Error loading tables</strong><span>Please try again.</span></div>`;
         });
-      });
     });
     
     mount.querySelectorAll("[data-order-type]").forEach(button => button.addEventListener("click", () => { 

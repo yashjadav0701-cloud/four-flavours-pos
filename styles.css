@@ -2207,3 +2207,67 @@ nav#admin-section-nav.admin-section-nav button.active span {
   0%, 100% { transform: translateY(0); }
   50% { transform: translateY(-10px); }
 }
+
+/* High-Contrast & Scaled POS Toolbar Buttons */
+.pos-toolbar-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+  flex-wrap: nowrap;
+}
+
+.pos-toolbar-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  height: 44px;
+  padding: 0 14px;                     /* Compact inner padding */
+  border-radius: 12px;
+  background: #ffffff;
+  border: 2px solid #0f2d1e;
+  color: #061a10;
+  font-size: 14px;
+  font-weight: 800;
+  white-space: nowrap;                 /* Locks text to a single line */
+  flex-shrink: 0;                      /* Prevents buttons from collapsing */
+  cursor: pointer;
+  box-sizing: border-box;
+}
+
+.pos-toolbar-pill span {
+  white-space: nowrap;
+}
+
+.pos-toolbar-pill i {
+  font-size: 18px !important;
+  color: #061a10 !important;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.pos-toolbar-pill.active {
+  background: #0f2d1e !important;
+  border-color: #0f2d1e !important;
+  color: #ffffff !important;
+}
+
+.pos-toolbar-pill.active i,
+.pos-toolbar-pill.active span {
+  color: #ffffff !important;
+}
+
+#pos-table-wrap .selected-text {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 14px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+#pos-table-wrap .selected-text i.ph-caret-down {
+  font-size: 16px !important;
+  margin-left: 1px;
+}

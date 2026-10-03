@@ -936,11 +936,37 @@ async function renderAdminWorkspace(mount) {
     const paint = () => {
       const q = search.value.trim().toLowerCase();
       const visible = products.filter(p => !q || `${p.name} ${p.category} ${p.description ?? ""}`.toLowerCase().includes(q));
-      list.innerHTML = visible.length ? visible.map(product => `<article class="admin-product-row"><div class="admin-product-image">${product.image_url ? `<img src="${versionedAsset(product.image_url)}" alt="" loading="lazy">` : `<div class="product-placeholder"><i class="ph ph-fork-knife"></i></div>`}</div><div class="admin-product-main"><div class="admin-product-title"><div><strong>${escapeHtml(product.name)}</strong><span>${escapeHtml(product.category)}</span></div><strong>${money(product.price)}</strong></div><p>${escapeHtml(product.description ?? "")}</p></div><div class="admin-product-actions"><span class="active-badge ${product.is_active ? "active" : ""}"><span></span>${product.is_active ? "Live" : "Hidden"}</span><button class="icon-btn icon-btn-light" data-edit-product="${product.id}" title="Edit dish" aria-label="Edit dish"><i class="ph ph-pencil-simple"></i></button></div></article>`).join("") : `<div class="empty-state"><i class="ph ph-magnifying-glass"></i><strong>No dishes found</strong><span>Try another search.</span></div>`;
+      
+      list.innerHTML = visible.length ? visible.map(product => `
+        <article class="admin-product-row" style="align-items: center;">
+          <div class="admin-product-image">${product.image_url ? `<img src="${versionedAsset(product.image_url)}" alt="" loading="lazy">` : `<div class="product-placeholder"><i class="ph ph-fork-knife"></i></div>`}</div>
+          <div class="admin-product-main">
+            <div class="admin-product-title"><div><strong>${escapeHtml(product.name)}</strong><span>${escapeHtml(product.category)}</span></div><strong style="font-size: 16px;">${money(product.price)}</strong></div>
+            <p>${escapeHtml(product.description ?? "")}</p>
+            <div style="margin-top: 8px;"><span class="active-badge ${product.is_active ? "active" : ""}"><span></span>${product.is_active ? "Live" : "Hidden"}</span></div>
+          </div>
+          
+          <div class="admin-product-actions" style="display: flex; flex-direction: column; gap: 8px; align-items: center; padding-left: 16px; border-left: 1px solid var(--line); margin-left: 12px;">
+            <button data-edit-product="${product.id}" title="Edit dish" style="width: 36px; height: 36px; padding: 0; border-radius: 10px; background: #f8fafc; border: 1px solid #e2e8f0; display: flex; align-items: center; justify-content: center; color: var(--forest-800); font-size: 18px; cursor: pointer; transition: transform 0.1s ease; box-shadow: 0 1px 2px rgba(0,0,0,0.03);" onmousedown="this.style.transform='scale(0.92)'" onmouseup="this.style.transform='scale(1)'" onmouseleave="this.style.transform='scale(1)'">
+              <i class="ph-bold ph-pencil-simple"></i>
+            </button>
+            <button data-delete-product="${product.id}" title="Delete dish" style="width: 36px; height: 36px; padding: 0; border-radius: 10px; background: #fff1f2; border: 1px solid #ffe4e6; display: flex; align-items: center; justify-content: center; color: #e11d48; font-size: 18px; cursor: pointer; transition: transform 0.1s ease; box-shadow: 0 1px 2px rgba(225,29,72,0.03);" onmousedown="this.style.transform='scale(0.92)'" onmouseup="this.style.transform='scale(1)'" onmouseleave="this.style.transform='scale(1)'">
+              <i class="ph-bold ph-trash"></i>
+            </button>
+          </div>
+          
+        </article>`).join("") : `<div class="empty-state"><i class="ph ph-magnifying-glass"></i><strong>No dishes found</strong><span>Try another search.</span></div>`;
     };
+    
     search.addEventListener("input", paint); paint();
     area.querySelector("#add-product").addEventListener("click", () => openProductEditor());
-    list.addEventListener("click", e => { const b = e.target.closest("[data-edit-product]"); if (!b) return; const p = products.find(x => x.id === b.dataset.editProduct); if (p) openProductEditor(p); });
+    
+    list.addEventListener("click", e => { 
+      const editBtn = e.target.closest("[data-edit-product]"); 
+      const delBtn = e.target.closest("[data-delete-product]");
+      if (editBtn) { const p = products.find(x => x.id === editBtn.dataset.editProduct); if (p) openProductEditor(p); } 
+      if (delBtn) { const p = products.find(x => x.id === delBtn.dataset.deleteProduct); if (p) openProductDelete(p); }
+    });
   }
 
   function renderTables() {
@@ -1414,6 +1440,37 @@ async function renderAdminWorkspace(mount) {
         });
       }
     }, 50);
+  }
+
+  function openProductDelete(product) {
+    openAppModal({
+      title: `Delete ${escapeHtml(product.name)}?`,
+      subtitle: "This will permanently remove the dish from your active menu.",
+      body: `<div class="danger-confirm"><div class="danger-confirm-icon"><i class="ph-bold ph-trash"></i></div><h3>Remove from menu?</h3><p>This action cannot be undone. Historical orders will still retain the item name on their receipts.</p></div>`,
+      actions: [
+        { label: "Cancel", icon: "ph-arrow-left", className: "btn-quiet", onClick: ({ close }) => close() },
+        { label: "Delete dish", icon: "ph-trash", className: "btn-danger", onClick: async ({ close, button }) => {
+          button.disabled = true;
+          try { 
+            const { error } = await supabase.from("products").delete().eq("id", product.id); 
+            if (error) throw error; 
+            
+            // Cleanup the image from storage to prevent orphaned files taking up space
+            const storagePath = storagePathFromUrl(product.image_url);
+            if (storagePath) {
+              await supabase.storage.from(DISH_IMAGE_BUCKET).remove([storagePath]);
+            }
+
+            showToast("Dish deleted", `${product.name} was removed.`); 
+            close(); 
+            await reload(); 
+          } catch (error) { 
+            button.disabled = false; 
+            showToast("Could not delete dish", error.message, "error"); 
+          }
+        }}
+      ]
+    });
   }
 
   function openProductEditor(product = null) {
