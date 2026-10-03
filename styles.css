@@ -150,280 +150,8 @@ button,input,select,textarea{font:inherit}button{border:0}button:disabled{cursor
   .sub-category-tile i { font-size: 22px; }
 }
 
-/* --------------------------------------------------------------------------
-   Cuisine Command Deck (Legacy Overrides)
-   -------------------------------------------------------------------------- */
+/* Legacy Horizontal Pill Navigation Safely Removed */
 
-.cuisine-navigator{
-  margin-bottom:13px;
-  padding:11px;
-  border:1px solid var(--line);
-  border-radius:17px;
-  background:
-    linear-gradient(
-      145deg,
-      rgba(255,255,255,.98),
-      rgba(241,246,237,.92)
-    );
-  box-shadow:
-    0 5px 18px rgba(25,50,28,.045);
-}
-
-.cuisine-navigator-head{
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  gap:10px;
-  padding:2px 2px 9px;
-}
-
-.cuisine-navigator-head > div{
-  min-width:0;
-}
-
-.cuisine-navigator-head strong{
-  display:block;
-  margin-top:3px;
-  color:var(--forest-900);
-  font-size:.76rem;
-  letter-spacing:-.01em;
-}
-
-.cuisine-navigator-hint{
-  display:inline-flex;
-  align-items:center;
-  gap:5px;
-  flex:0 0 auto;
-  color:var(--muted);
-  font-size:.59rem;
-  font-weight:800;
-}
-
-.cuisine-grid{
-  display:grid;
-  grid-template-columns:
-    repeat(5, minmax(0,1fr));
-  gap:7px;
-}
-
-.cuisine-card{
-  position:relative;
-  min-width:0;
-  min-height:66px;
-  display:grid;
-  grid-template-columns:auto minmax(0,1fr);
-  align-items:center;
-  gap:8px;
-  overflow:hidden;
-  padding:9px;
-  border:1px solid var(--line);
-  border-radius:13px;
-  background:rgba(255,255,255,.78);
-  color:var(--forest-900);
-  text-align:left;
-  cursor:pointer;
-  transition:
-    transform 170ms ease,
-    border-color 170ms ease,
-    background 170ms ease,
-    box-shadow 170ms ease;
-}
-
-.cuisine-card::after{
-  content:"";
-  position:absolute;
-  left:0;
-  right:0;
-  bottom:0;
-  height:2px;
-  background:var(--gold-500);
-  transform:scaleX(0);
-  transform-origin:left;
-  transition:transform 190ms ease;
-}
-
-.cuisine-card:hover{
-  transform:translateY(-1px);
-  border-color:var(--sage-300);
-  box-shadow:
-    0 7px 18px rgba(25,50,28,.07);
-}
-
-.cuisine-card.active{
-  border-color:var(--forest-500);
-  background:
-    linear-gradient(
-      145deg,
-      #f8faf6,
-      #e9f0e5
-    );
-  box-shadow:
-    0 8px 20px rgba(25,50,28,.10);
-}
-
-.cuisine-card.active::after{
-  transform:scaleX(1);
-}
-
-.cuisine-card-icon{
-  width:34px;
-  height:34px;
-  flex:0 0 auto;
-  display:grid;
-  place-items:center;
-  border:1px solid var(--line);
-  border-radius:10px;
-  background:var(--cream-50);
-  color:var(--forest-700);
-  font-size:17px;
-  transition:
-    transform 190ms ease,
-    background 190ms ease,
-    color 190ms ease;
-}
-
-.cuisine-card.active .cuisine-card-icon{
-  background:var(--forest-900);
-  border-color:var(--forest-900);
-  color:var(--gold-400);
-  transform:scale(1.04);
-}
-
-.cuisine-card-body{
-  min-width:0;
-}
-
-.cuisine-card-body strong,
-.cuisine-card-body small{
-  display:block;
-  overflow:hidden;
-  text-overflow:ellipsis;
-  white-space:nowrap;
-}
-
-.cuisine-card-body strong{
-  font-size:.72rem;
-  line-height:1.2;
-}
-
-.cuisine-card-body small{
-  margin-top:3px;
-  color:var(--muted);
-  font-size:.57rem;
-  font-weight:700;
-}
-
-.cuisine-card-mark{
-  position:absolute;
-  top:7px;
-  right:7px;
-  width:17px;
-  height:17px;
-  display:grid;
-  place-items:center;
-  border-radius:50%;
-  background:var(--forest-900);
-  color:#fff;
-  font-size:9px;
-  opacity:0;
-  transform:scale(.7);
-  transition:
-    opacity 160ms ease,
-    transform 180ms ease;
-}
-
-.cuisine-card.active .cuisine-card-mark{
-  opacity:1;
-  transform:scale(1);
-}
-
-/* Customer version: slightly calmer and more editorial. */
-.customer-cuisine-navigator{
-  margin-top:2px;
-}
-
-.customer-cuisine-navigator .cuisine-card{
-  background:#fff;
-}
-
-.customer-cuisine-navigator .cuisine-card.active{
-  background:
-    linear-gradient(
-      145deg,
-      #f8faf5,
-      #edf3ea
-    );
-}
-
-@media (max-width:1100px){
-  .cuisine-grid{
-    grid-template-columns:
-      repeat(3, minmax(0,1fr));
-  }
-}
-
-@media (max-width:720px){
-  .cuisine-navigator{
-    padding:9px;
-    border-radius:15px;
-  }
-
-  .cuisine-navigator-head{
-    padding-bottom:8px;
-  }
-
-  .cuisine-grid{
-    grid-template-columns:
-      repeat(2, minmax(0,1fr));
-    gap:6px;
-  }
-
-  .cuisine-card{
-    min-height:61px;
-    padding:8px;
-  }
-
-  .cuisine-card-icon{
-    width:31px;
-    height:31px;
-    border-radius:9px;
-    font-size:15px;
-  }
-
-  .cuisine-card-body strong{
-    font-size:.67rem;
-  }
-
-  .cuisine-card-body small{
-    font-size:.54rem;
-  }
-
-  .cuisine-card-mark{
-    width:16px;
-    height:16px;
-    top:6px;
-    right:6px;
-  }
-}
-
-@media (max-width:390px){
-  .cuisine-grid{
-    gap:5px;
-  }
-
-  .cuisine-card{
-    min-height:57px;
-    grid-template-columns:auto minmax(0,1fr);
-    gap:6px;
-    padding:7px;
-  }
-
-  .cuisine-card-icon{
-    width:28px;
-    height:28px;
-    font-size:14px;
-  }
-}
 .pos-product-container,.customer-product-scroll,.admin-list-scroll,.admin-table-scroll,.session-mini-scroll,.session-scroll-container{overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:var(--sage-300) transparent}.pos-product-container{height:min(65vh,735px);min-height:320px;padding-right:2px}.pos-product-grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:11px;padding:6px 1px 6px}.pos-product-card{min-width:0;display:grid;overflow:hidden;padding:0;border:1px solid var(--line);border-radius:15px;background:var(--paper);text-align:left;box-shadow:0 4px 14px rgba(25,50,28,.045);transition:transform 150ms ease,box-shadow 150ms ease,border-color 150ms ease}.pos-product-card:hover,.pos-product-card.pressed{transform:translateY(-4px);border-color:var(--forest-500);box-shadow:0 0 0 1px var(--forest-500), 0 12px 28px rgba(76,110,75,.25)}
 .pos-product-media,.customer-product-media{position:relative;width:100%;aspect-ratio:1/1;overflow:hidden;background:var(--sage-100)}.pos-product-media img,.customer-product-media img{width:100%;height:100%;object-fit:cover}.product-placeholder{width:100%;height:100%;display:grid;place-items:center;background:linear-gradient(145deg,#e6ede2,#f7f9f4);color:var(--forest-500)}.product-placeholder i{font-size:34px;opacity:.72}.veg-mark{position:absolute;top:8px;right:8px;width:19px;height:19px;display:grid;place-items:center;border:1.5px solid #2e6f43;border-radius:4px;background:#fff}.veg-mark span{width:7px;height:7px;border-radius:50%;background:#2e6f43}
 .pos-product-copy{position:relative;padding:12px 10px}.pos-product-copy>strong{display:block;min-height:42px;font-size:1.05rem;font-weight:900;line-height:1.25}.pos-product-copy>span{display:block;margin-top:4px;color:var(--muted);font-size:.7rem}.pos-product-bottom{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:12px}.pos-product-bottom b{color:var(--forest-900);font-size:1rem;font-weight:900}.round-add{width:29px;height:29px;display:inline-grid;place-items:center;border:1px solid var(--line);border-radius:9px;color:var(--forest-900);background:var(--sage-100)}
@@ -1042,9 +770,8 @@ button,input,select,textarea{font:inherit}button{border:0}button:disabled{cursor
   z-index: 41;
 }
 
-.pos-content.smart-scroll-hide .pos-toolbar-row,
-.pos-content.smart-scroll-hide .drill-down-header:not(.floating-header) {
-  display: none !important; /* Safely removes them from the layout flow to prevent collision */
+.pos-content.smart-scroll-hide .pos-toolbar-row {
+  display: none !important; 
 }
 
 /* --- Floating Header Overlay & Blur --- */
@@ -1052,26 +779,7 @@ button,input,select,textarea{font:inherit}button{border:0}button:disabled{cursor
   position: relative;
 }
 
-.drill-down-header.floating-header {
-  position: sticky !important;
-  top: 0 !important;
-  z-index: 45 !important;
-  padding: 12px var(--app-px) !important;
-  background: rgba(255, 255, 255, 0.95) !important;
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  border-bottom: 1px solid var(--line) !important;
-  margin-left: calc(-1 * var(--app-px)) !important;
-  margin-right: calc(-1 * var(--app-px)) !important;
-  width: calc(100% + (2 * var(--app-px))) !important;
-}
-
-.pos-content.smart-scroll-hide .drill-down-header.floating-header {
-  transform: translateY(-100%); /* Slides out cleanly without using margins */
-}
+/* The toxic translateY transform has been permanently removed so it doesn't jump over the topbar */
 
 /* --- Perfect 3-Button Modal Layout --- */
 .app-modal .modal-actions {
@@ -2125,4 +1833,91 @@ nav#admin-section-nav.admin-section-nav button.active i {
 .pos-product-bottom b {
   font-size: 16px !important;
   color: var(--forest-950) !important;
+}
+
+/* =========================================
+   PREMIUM OVERRIDES (ADMIN & POS)
+   ========================================= */
+
+/* 1. Admin Navigation Bar */
+.admin-section-nav {
+  height: 76px !important;
+  background: #FCFCF9 !important;
+  border-top: 1px solid rgba(44, 76, 59, 0.1) !important;
+  box-shadow: 0 -8px 24px rgba(0,0,0,0.04) !important;
+  padding-bottom: env(safe-area-inset-bottom) !important;
+}
+.admin-section-nav button {
+  color: var(--forest-600) !important;
+  transition: all 0.2s ease !important;
+  margin: 6px 4px !important;
+  height: calc(100% - 12px) !important;
+}
+.admin-section-nav button i {
+  color: var(--forest-600) !important;
+}
+.admin-section-nav button.active {
+  background: var(--sage-200) !important;
+  border-radius: 12px !important;
+}
+.admin-section-nav button.active i,
+.admin-section-nav button.active span {
+  color: var(--forest-950) !important;
+  font-weight: 700 !important;
+}
+
+/* 2. Full-Bleed Edge-to-Edge Product Images */
+.pos-product-media {
+  padding: 0 !important;
+  margin: 0 !important;
+  width: 100% !important;
+  aspect-ratio: 4 / 3 !important;
+  overflow: hidden !important;
+  position: relative !important;
+  background: var(--cream-100) !important;
+}
+.pos-product-media img {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+  object-position: center !important;
+  display: block !important;
+}
+.veg-mark {
+  position: absolute !important;
+  top: 10px !important;
+  right: 10px !important;
+  z-index: 2 !important;
+  background: rgba(255,255,255,0.95) !important;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1) !important;
+  border-radius: 4px !important;
+}
+
+/* 3. POS Frosted Glass Header & Grid Gap Fix */
+.pos-product-grid {
+  padding-top: 8px !important;
+  margin-top: 0 !important;
+}
+#parity-unified-header {
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+  padding: 8px var(--app-px) !important;
+  min-height: 48px !important;
+  background: rgba(244, 244, 240, 0.85) !important;
+  backdrop-filter: blur(12px) !important;
+  -webkit-backdrop-filter: blur(12px) !important;
+  border-bottom: 1px solid rgba(0,0,0,0.04) !important;
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 40 !important; /* Lowered from 100 so it safely slides UNDER the main topbar */
+  margin: 0 calc(-1 * var(--app-px)) 12px calc(-1 * var(--app-px)) !important;
+  width: calc(100% + (2 * var(--app-px))) !important;
+  transition: none !important;
+}
+
+/* Guarantees the main app topbar stays strictly opaque and ABOVE everything else */
+.app-topbar, .customer-topbar {
+  z-index: 110 !important;
+  background: var(--paper) !important; 
 }

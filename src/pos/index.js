@@ -370,17 +370,19 @@ export async function render({ mount }) {
     
     let html = ``;
     if (!searchTerm) {
-      // 100% PARITY: Both Customer and POS use the exact same floating dropdown header
+      // 100% PARITY: Slimmed Glassmorphism header
       html += `
-        <div class="drill-down-header floating-header">
-          <div style="display: flex; align-items: center; gap: 8px;">
-            <button class="icon-btn icon-btn-light" id="pos-btn-back" title="Back"><i class="ph ph-arrow-left"></i></button>
-            <h2 style="margin: 0;">${escapeHtml(activeCuisine)}</h2>
+        <div id="parity-unified-header">
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <button id="pos-btn-back" title="Back" style="margin: 0; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; background: #ffffff; border-radius: 50%; border: 1px solid rgba(0,0,0,0.04); box-shadow: 0 2px 8px rgba(0,0,0,0.06); cursor: pointer;">
+              <i class="ph-bold ph-arrow-left" style="font-size: 1rem; color: var(--forest-900);"></i>
+            </button>
+            <h2 style="margin: 0; font-size: 1.15rem; font-weight: 800; color: var(--forest-950); letter-spacing: -0.01em; line-height: 1;">${escapeHtml(activeCuisine)}</h2>
           </div>
-          <div class="header-right-actions">
-            <button class="cat-toggle-btn" id="pos-cat-toggle">
+          <div style="position: relative;">
+            <button id="pos-cat-toggle" style="margin: 0; display: flex; align-items: center; gap: 6px; padding: 0 14px; height: 32px; background: #ffffff; border: 1px solid rgba(0,0,0,0.04); box-shadow: 0 2px 8px rgba(0,0,0,0.06); border-radius: 16px; font-weight: 700; font-size: 0.85rem; color: var(--forest-900); cursor: pointer;">
               <span>${escapeHtml(activeSubCategory)}</span>
-              <i class="ph ph-caret-down"></i>
+              <i class="ph-bold ph-caret-down" style="color: var(--gold-500); font-size: 1rem;"></i>
             </button>
             <div class="sub-category-dropdown" id="pos-subcat-dropdown">
               ${subCategories.map(sub => `
@@ -394,10 +396,15 @@ export async function render({ mount }) {
         </div>
       `;
     } else {
-      html += `<div class="drill-down-header floating-header"><h2>Search results for "${escapeHtml(searchTerm)}"</h2></div>`;
+      html += `
+        <div id="parity-unified-header">
+          <h2 style="margin: 0; font-size: 1.1rem; font-weight: 800; color: var(--forest-950);">Search results for "${escapeHtml(searchTerm)}"</h2>
+        </div>
+      `;
     }
 
-    html += `<section class="pos-product-container" id="pos-product-container" style="padding-top: 70px;"><div class="pos-product-grid" id="pos-product-grid"></div></section>`;
+    // GAP OBLITERATED: Removed the hardcoded 'padding-top: 70px'
+    html += `<section class="pos-product-container" id="pos-product-container"><div class="pos-product-grid" id="pos-product-grid"></div></section>`;
     
     area.innerHTML = html;
 
