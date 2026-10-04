@@ -523,7 +523,7 @@ async function renderAdminWorkspace(mount) {
             <i class="ph ph-list"></i>
             <span class="hamburger-dot" style="position: absolute; top: 4px; right: 4px; width: 8px; height: 8px; border-radius: 50%; background: #e11d48; display: none; border: 2px solid var(--paper);"></span>
           </button>
-          <img src="${versionedAsset("assets/images/website_logo.png")}" alt="Four Flavours" style="height: 40px; width: auto;" />
+          <img src="${versionedAsset("assets/images/website_logo.svg")}" alt="Four Flavours" style="height: 40px; width: auto;" />
         </div>
         <div class="brand-center main-logo-only">
           <!-- Center logo safely removed to match POS layout -->
@@ -716,7 +716,7 @@ async function renderAdminWorkspace(mount) {
     const receiptHTML = `
       <article class="thermal-receipt" id="thermal-receipt-content">
         <header class="thermal-head">
-          <img class="thermal-logo" src="${versionedAsset("assets/images/website_icon.png")}" alt="Logo">
+          <img class="thermal-logo" src="${versionedAsset("assets/images/website_icon.svg")}" alt="Logo">
           <h1>${escapeHtml(settings.restaurant_name)}</h1>
           ${settings.restaurant_address ? `<p>${escapeHtml(settings.restaurant_address).replace(/\n/g, '<br>')}</p>` : ''}
           ${settings.gst_number ? `<p><strong>GSTIN:</strong> ${escapeHtml(settings.gst_number)}</p>` : ''}
@@ -924,7 +924,7 @@ async function renderAdminWorkspace(mount) {
 
     area.innerHTML = `
       ${alertsHtml}
-      <section class="admin-hero" style="${alertsHtml ? 'padding-top: 0;' : ''}"><div><span class="eyebrow">Control centre</span><h1>Everything in its place.</h1><p>Menu, tables, tax, UPI and table sessions in one restrained workspace.</p></div><div class="admin-hero-mark"><img src="${versionedAsset("assets/images/website_icon.png")}" alt=""></div></section>
+      <section class="admin-hero" style="${alertsHtml ? 'padding-top: 0;' : ''}"><div><span class="eyebrow">Control centre</span><h1>Everything in its place.</h1><p>Menu, tables, tax, UPI and table sessions in one restrained workspace.</p></div><div class="admin-hero-mark"><img src="${versionedAsset("assets/images/website_icon.svg")}" alt=""></div></section>
       <section class="metric-grid">${metricCard("ph-fork-knife", activeProducts, "Active dishes")}${metricCard("ph-armchair", activeTables, "Active tables")}${metricCard("ph-bell", sessions.length, "Open sessions")}${metricCard("ph-receipt", billRequests, "Bill requests")}</section>
       <section class="admin-grid-two">
         <article class="admin-panel"><div class="panel-head"><div><span class="eyebrow">Quick actions</span><h2>Run the floor</h2></div></div><div class="quick-action-grid"><button class="quick-action" data-go="tables"><i class="ph ph-armchair"></i><span><strong>Manage tables</strong><small>Add, edit, delete and print QR codes.</small></span><i class="ph ph-arrow-right"></i></button><button class="quick-action" data-go="menu"><i class="ph ph-fork-knife"></i><span><strong>Manage menu</strong><small>Names, descriptions, prices and visibility.</small></span><i class="ph ph-arrow-right"></i></button><button class="quick-action" data-go="settings"><i class="ph ph-gear"></i><span><strong>Tax & UPI</strong><small>Keep server-side billing settings current.</small></span><i class="ph ph-arrow-right"></i></button></div></article>
@@ -1116,7 +1116,7 @@ async function renderAdminWorkspace(mount) {
       const canvasHtml = `
          <div class="a0-canvas" id="a0-print-target">
             <header class="a0-header">
-               <div class="a0-logo-box"><img src="${versionedAsset("assets/images/website_logo.png")}" class="a0-logo" alt="Logo"></div>
+               <div class="a0-logo-box"><img src="${versionedAsset("assets/images/website_logo.svg")}" class="a0-logo" alt="Logo"></div>
             </header>
             <div class="a0-grid">
                ${columnsHtml}
@@ -1820,7 +1820,7 @@ async function renderAdminWorkspace(mount) {
             button.disabled = true; 
             const host = document.querySelector("#qr-print-host"); 
             const qr = modal.root.querySelector("#table-qr"); 
-            host.innerHTML = `<section class="qr-print-sheet"><img src="${versionedAsset("assets/images/website_icon.png")}" alt=""><h1>Four Flavours</h1><h2>Table ${escapeHtml(table.table_no)}</h2><div class="qr-print-code">${qr.innerHTML}</div><p>Scan to view the menu & order</p></section>`; 
+            host.innerHTML = `<section class="qr-print-sheet"><img src="${versionedAsset("assets/images/website_icon.svg")}" alt=""><h1>Four Flavours</h1><h2>Table ${escapeHtml(table.table_no)}</h2><div class="qr-print-code">${qr.innerHTML}</div><p>Scan to view the menu & order</p></section>`; 
             document.body.classList.add("print-qr"); 
             window.print(); 
             setTimeout(() => { document.body.classList.remove("print-qr"); host.innerHTML = ""; button.disabled = false; }, 800); 

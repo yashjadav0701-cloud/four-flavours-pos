@@ -58,8 +58,8 @@ only returned after the session reaches `bill_ready` or `closed`.
 four-flavours-pos/
 ├── assets/
 │   ├── images/
-│   │   ├── website_icon.png
-│   │   └── website_logo.png
+│   │   ├── website_icon.svg
+│   │   └── website_logo.svg
 │   └── icons/
 ├── src/
 │   ├── core/
@@ -208,7 +208,7 @@ Replace: v=2.0.1
 Dynamic JavaScript-created asset URLs use:
 
 ```js
-versionedAsset("assets/images/website_icon.png")
+versionedAsset("assets/images/website_icon.svg")
 ```
 
 so they automatically receive the current version query string.

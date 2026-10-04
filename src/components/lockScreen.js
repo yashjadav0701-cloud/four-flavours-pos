@@ -4,7 +4,7 @@ import { showToast } from "./navigation.js";
 
 export async function renderAdminLock({ mount, onUnlocked }) {
   if (!supabase) {
-    mount.innerHTML = `<section class="access-screen"><div class="access-card"><img class="access-logo" src="${versionedAsset("assets/images/website_icon.png")}" alt="" /><span class="eyebrow">Configuration required</span><h1>Connect Four Flavours</h1><p>Add the Supabase project URL and publishable/anon key in index.html.</p></div></section>`;
+    mount.innerHTML = `<section class="access-screen"><div class="access-card"><img class="access-logo" src="${versionedAsset("assets/images/website_icon.svg")}" alt="" /><span class="eyebrow">Configuration required</span><h1>Connect Four Flavours</h1><p>Add the Supabase project URL and publishable/anon key in index.html.</p></div></section>`;
     return () => {};
   }
 
@@ -17,7 +17,7 @@ export async function renderAdminLock({ mount, onUnlocked }) {
     <section class="access-screen">
       <div class="access-card">
         <div class="access-brand">
-          <img class="access-logo" src="${versionedAsset("assets/images/website_icon.png")}" alt="" />
+          <img class="access-logo" src="${versionedAsset("assets/images/website_icon.svg")}" alt="" />
           <div><span class="eyebrow">Manager workspace</span><strong>Four Flavours</strong></div>
         </div>
         <h1>Secure admin access</h1>

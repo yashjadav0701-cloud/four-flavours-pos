@@ -90,7 +90,7 @@ export function mountNavigation({ active = "pos" }) {
     <div class="drawer-overlay" data-drawer-overlay></div>
     <aside class="app-drawer" data-app-drawer aria-label="Application navigation">
       <div class="drawer-head">
-        <img src="${versionedAsset("assets/images/website_icon.png")}" alt="" />
+        <img src="${versionedAsset("assets/images/website_icon.svg")}" alt="" />
         <div><strong>Four Flavours</strong><small>Restaurant OS</small></div>
         <button class="icon-btn icon-btn-dark" data-close-drawer title="Close menu" aria-label="Close menu"><i class="ph ph-x"></i></button>
       </div>

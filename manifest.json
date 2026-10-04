@@ -7,17 +7,17 @@
   "theme_color": "#122216",
   "icons": [
     {
-      "src": "/assets/images/website_icon.png?v=2.2.1",
+      "src": "/assets/images/website_icon.svg?v=2.2.2",
       "sizes": "192x192",
       "type": "image/png"
     },
     {
-      "src": "/assets/images/website_icon.png?v=2.2.1",
+      "src": "/assets/images/website_icon.svg?v=2.2.2",
       "sizes": "512x512",
       "type": "image/png"
     },
     {
-      "src": "/assets/images/website_icon.png?v=2.2.1",
+      "src": "/assets/images/website_icon.svg?v=2.2.2",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"

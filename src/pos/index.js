@@ -5,7 +5,7 @@ import { escapeHtml, money, mountNavigation, openAppModal, showToast } from "../
 
 export async function render({ mount }) {
   if (!supabase) {
-    mount.innerHTML = `<section class="access-screen dark-access"><div class="access-card"><img class="access-logo" src="${versionedAsset("assets/images/website_icon.png")}" alt=""><h1>Four Flavours POS</h1><p>Supabase configuration is missing.</p></div></section>`;
+    mount.innerHTML = `<section class="access-screen dark-access"><div class="access-card"><img class="access-logo" src="${versionedAsset("assets/images/website_icon.svg")}" alt=""><h1>Four Flavours POS</h1><p>Supabase configuration is missing.</p></div></section>`;
     return () => {};
   }
 
@@ -115,7 +115,7 @@ export async function render({ mount }) {
               <span class="hamburger-dot" style="position: absolute; top: 4px; right: 4px; width: 8px; height: 8px; border-radius: 50%; background: #e11d48; display: none; border: 2px solid var(--paper);"></span>
             </button>
           `}
-          <img src="${versionedAsset("assets/images/website_logo.png")}" alt="Four Flavours" style="height: 46px; width: auto; max-height: none; object-fit: contain; flex-shrink: 0;" />
+          <img src="${versionedAsset("assets/images/website_logo.svg")}" alt="Four Flavours" style="height: 46px; width: auto; max-height: none; object-fit: contain; flex-shrink: 0;" />
         </div>
         <div class="brand-center pos-brand-center main-logo-only"></div>
         <div class="topbar-side topbar-right">
@@ -1197,7 +1197,7 @@ export async function render({ mount }) {
     const receiptHTML = `
       <article class="thermal-receipt" id="thermal-receipt-content">
         <header class="thermal-head">
-          <img class="thermal-logo" src="${versionedAsset("assets/images/website_icon.png")}" alt="Logo">
+          <img class="thermal-logo" src="${versionedAsset("assets/images/website_icon.svg")}" alt="Logo">
           <h1>${escapeHtml(settings.restaurant_name)}</h1>
           ${settings.restaurant_address ? `<p>${escapeHtml(settings.restaurant_address).replace(/\n/g, '<br>')}</p>` : ''}
           ${settings.gst_number ? `<p><strong>GSTIN:</strong> ${escapeHtml(settings.gst_number)}</p>` : ''}
