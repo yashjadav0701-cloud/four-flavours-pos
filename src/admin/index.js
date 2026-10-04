@@ -507,7 +507,13 @@ async function fetchWorkspace() {
     supabase.from("cuisines").select("*").order("sort_order", { ascending: true })
   ]);
   for (const result of [settings, products, tables, sessions, cuisines]) if (result?.error) throw result.error;
-  return { settings: { ...DEFAULT_SETTINGS, ...(settings.data ?? {}) }, products: products.data ?? [], tables: tables.data ?? [], sessions: sessions.data ?? [], cuisines: cuisines.data ?? [] };
+  
+  // NATURAL SORT: Ensure all admin lists naturally sort as 1, 2, 3 instead of 1, 10, 11
+  const sortedTables = (tables.data ?? []).sort((a, b) => 
+    String(a.table_no).localeCompare(String(b.table_no), undefined, { numeric: true, sensitivity: 'base' })
+  );
+
+  return { settings: { ...DEFAULT_SETTINGS, ...(settings.data ?? {}) }, products: products.data ?? [], tables: sortedTables, sessions: sessions.data ?? [], cuisines: cuisines.data ?? [] };
 }
 
 async function renderAdminWorkspace(mount) {
@@ -1671,7 +1677,7 @@ async function renderAdminWorkspace(mount) {
           <h1 style="text-align: left !important; margin: 6px 0;">Keep the bill precise.</h1>
           <p style="text-align: left !important;">Database-verified tax and totals.</p>
         </div>
-        <button class="btn btn-danger" id="admin-sign-out" style="flex-shrink: 0;"><i class="ph-bold ph-sign-out"></i>Sign out</button>
+        <button class="btn btn-quiet" id="admin-lock-workspace" style="border-color: var(--forest-900); color: var(--forest-900); font-weight: 800; flex-shrink: 0;"><i class="ph-bold ph-lock-key"></i>Lock & Return to POS</button>
       </section>
       <section class="admin-panel settings-panel">
         <form id="settings-form" class="settings-form-grid">
@@ -1687,18 +1693,11 @@ async function renderAdminWorkspace(mount) {
         </form>
       </section>`;
 
-    area.querySelector("#admin-sign-out").addEventListener("click", async (e) => {
-      const btn = e.currentTarget;
-      btn.innerHTML = `<i class="ph ph-spinner-gap ph-spin"></i><span>Signing out...</span>`;
-      btn.disabled = true;
-      try {
-        await supabase.auth.signOut();
-        window.location.href = "/";
-      } catch (error) {
-        showToast("Sign out failed", error.message, "error");
-        btn.innerHTML = `<i class="ph-bold ph-sign-out"></i>Sign out`;
-        btn.disabled = false;
-      }
+    area.querySelector("#admin-lock-workspace").addEventListener("click", () => {
+      // Securely routes the manager back to the POS floor. Re-entering Admin will strictly require the PIN.
+      history.pushState({}, "", location.pathname);
+      location.hash = "";
+      window.dispatchEvent(new Event("fourflavours:navigate"));
     });
 
     area.querySelector("#settings-form").addEventListener("submit", async e => {
@@ -1748,7 +1747,10 @@ async function renderAdminWorkspace(mount) {
   }
 
   function openTableQR(table) {
-    const url = getCustomerTableUrl(table.id);
+    const baseUrl = getCustomerTableUrl(table.id);
+    // INJECT SECURE SCAN INTENT: This guarantees the physical sticker overrides the lockout
+    const url = baseUrl + (baseUrl.includes("?") ? "&" : "?") + "scan=true";
+    
     const modal = openAppModal({
       title: `Table ${escapeHtml(table.table_no)} QR`,
       subtitle: "This QR always opens the live Four Flavours menu for this specific table.",

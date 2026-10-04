@@ -3,6 +3,22 @@ import { DEFAULT_SETTINGS, versionedAsset } from "../core/config.js";
 import { createPOSState } from "../core/posState.js";
 import { escapeHtml, money, mountNavigation, openAppModal, showToast } from "../components/navigation.js";
 
+// --- INSTANT URL SCRUBBER (LIGHTNING FAST) ---
+// This executes the exact millisecond the browser reads this file, before any UI loads.
+const _initParams = new URLSearchParams(window.location.search);
+const _initTable = _initParams.get("table") || _initParams.get("t");
+const _initScan = _initParams.get("scan");
+
+if (_initTable && _initScan && _initScan.toLowerCase() === "true") {
+    // 1. Instantly wipe the old session memory
+    localStorage.removeItem(`fourflavours.session.${_initTable}`);
+    
+    // 2. Instantly erase 'scan=true' from the address bar while keeping the #hash
+    const _cleanUrl = window.location.protocol + "//" + window.location.host + window.location.pathname + "?table=" + _initTable + window.location.hash;
+    window.history.replaceState({ path: _cleanUrl }, '', _cleanUrl);
+}
+// ---------------------------------------------
+
 export async function render({ mount }) {
   if (!supabase) {
     mount.innerHTML = `<section class="access-screen dark-access"><div class="access-card"><img class="access-logo" src="${versionedAsset("assets/images/website_icon.svg")}" alt=""><h1>Four Flavours POS</h1><p>Supabase configuration is missing.</p></div></section>`;
@@ -21,8 +37,12 @@ export async function render({ mount }) {
 
   const settings = { ...DEFAULT_SETTINGS, ...(settingsResult.data ?? {}) };
   const products = productsResult.data ?? [];
-  const tables = tablesResult.data ?? [];
   const cuisines = cuisinesResult.data ?? [];
+  
+  // NATURAL SORT: Forces "10" to come after "9" instead of after "1"
+  const tables = (tablesResult.data ?? []).sort((a, b) => 
+    String(a.table_no).localeCompare(String(b.table_no), undefined, { numeric: true, sensitivity: 'base' })
+  );
   
   // Synchronous dictionary for the global notification engine
   window.__FF_TABLES__ = tables;
@@ -31,6 +51,10 @@ export async function render({ mount }) {
   const urlParams = new URLSearchParams(window.location.search);
   const qrTableId = urlParams.get("table") || urlParams.get("t");
   const isCustomerMode = Boolean(qrTableId);
+  
+  // SECURE SCAN INTENT: Detect if this is a fresh physical QR scan (Case-Insensitive)
+  const scanParam = urlParams.get("scan");
+  const isPhysicalScan = scanParam && scanParam.toLowerCase() === "true";
   
   let customerSessionToken = null;
   const currentTableObj = isCustomerMode ? tables.find(t => t.id === qrTableId) : null;
@@ -43,19 +67,125 @@ export async function render({ mount }) {
     
     const sessionKey = `fourflavours.session.${currentTableObj.id}`;
     
-    // VERIFY LOCAL CACHE BEFORE BOOTSTRAPPING
-    // If the database says there is no open session, wipe the user's cache immediately
-    const { data: checkSession } = await supabase.from("dining_sessions")
-      .select("status")
-      .eq("table_id", currentTableObj.id)
-      .eq("status", "open")
-      .maybeSingle();
-      
-    if (!checkSession) {
-      localStorage.removeItem(sessionKey);
+    // If the user physically scanned the sticker, clear their memory and scrub the URL
+    if (isPhysicalScan) {
+        localStorage.removeItem(sessionKey);
+        // Instantly wipe '&scan=true' from the address bar so they cannot bookmark or copy it!
+        const hash = window.location.hash;
+        const cleanUrl = window.location.protocol + "//" + window.location.host + window.location.pathname + "?table=" + qrTableId + hash;
+        window.history.replaceState({ path: cleanUrl }, '', cleanUrl);
     }
 
-    // Bootstrap secure customer session
+    const existingToken = localStorage.getItem(sessionKey);
+
+    // 1. REMOTE GHOST-ORDER PREVENTION: Check if the user's saved session is closed
+    if (existingToken) {
+        const { data: mySession } = await supabase.from("dining_sessions")
+            .select("status, updated_at")
+            .eq("session_token", existingToken)
+            .maybeSingle();
+
+        if (mySession && mySession.status === "closed") {
+            const closedDate = new Date(mySession.updated_at);
+            const hoursSinceClosed = (Date.now() - closedDate.getTime()) / (1000 * 60 * 60);
+
+            // Lock them out for 12 hours so they cannot order from home later in the day
+            if (hoursSinceClosed < 12) {
+                const timeString = closedDate.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
+                const dateString = closedDate.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+                
+                mount.innerHTML = `
+                  <style>
+                    @keyframes lockSlideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+                    @keyframes lockPulse { 0% { box-shadow: 0 0 0 0 rgba(18, 34, 22, 0.1); transform: scale(1); } 50% { box-shadow: 0 0 0 15px rgba(18, 34, 22, 0); transform: scale(1.05); } 100% { box-shadow: 0 0 0 0 rgba(18, 34, 22, 0); transform: scale(1); } }
+                    .premium-lock-screen { display: flex; align-items: center; justify-content: center; min-height: 100vh; background: var(--paper, #FCFCF9); padding: 24px; font-family: inherit; }
+                    .premium-lock-card { background: #ffffff; max-width: 440px; width: 100%; border-radius: 24px; padding: 40px 32px; box-shadow: 0 12px 40px rgba(0,0,0,0.06), 0 1px 3px rgba(0,0,0,0.02); text-align: center; animation: lockSlideUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+                    .premium-lock-icon { width: 100px; height: 100px; background: transparent; border: none; display: flex; align-items: center; justify-content: center; margin: 0 auto 24px; animation: lockPulse 3s infinite ease-in-out; }
+                    .premium-lock-icon img { width: 100%; height: 100%; object-fit: contain; }
+                    .premium-lock-title { font-size: 1.75rem; font-weight: 900; color: var(--forest-950); letter-spacing: -0.02em; margin: 0 0 12px 0; }
+                    .premium-lock-desc { color: var(--forest-700); font-size: 0.95rem; line-height: 1.5; margin: 0 0 32px 0; }
+                    .premium-lock-notice { background: #f8faf9; border-radius: 16px; border: 1px solid rgba(18,34,22,0.08); padding: 20px; display: flex; gap: 14px; text-align: left; align-items: flex-start; }
+                    .premium-lock-notice i { color: var(--forest-900); font-size: 22px; margin-top: 2px; }
+                    .premium-lock-notice strong { display: block; color: var(--forest-950); font-size: 0.9rem; margin-bottom: 4px; }
+                    .premium-lock-notice span { color: var(--forest-700); font-size: 0.85rem; line-height: 1.5; }
+                  </style>
+                  <main class="premium-lock-screen">
+                    <div class="premium-lock-card">
+                      <div class="premium-lock-icon">
+                        <img src="${versionedAsset("assets/images/ses_exp.svg")}" alt="Session Expired">
+                      </div>
+                      <h1 class="premium-lock-title">Session Expired</h1>
+                      <p class="premium-lock-desc">Your dining session for <strong>Table ${currentTableObj.table_no}</strong> was completed on <br><strong style="color: var(--forest-950);">${dateString} at ${timeString}</strong>.</p>
+                      <div class="premium-lock-notice">
+                          <i class="ph-bold ph-shield-check"></i>
+                          <div>
+                            <strong>Security Lock Active</strong>
+                            <span>To prevent remote ordering, this QR link is temporarily locked. If you are still at the restaurant, please ask a staff member to clear the table.</span>
+                          </div>
+                      </div>
+                    </div>
+                  </main>
+                `;
+                return () => {};
+            } else {
+                localStorage.removeItem(sessionKey);
+            }
+        }
+    }
+
+    // 2. OCCUPIED TABLE PREVENTION: Ensure the table isn't actively held by another customer
+    const { data: activeTableSession } = await supabase.from("dining_sessions")
+        .select("session_token")
+        .eq("table_id", currentTableObj.id)
+        .neq("status", "closed")
+        .maybeSingle();
+    
+    if (activeTableSession && activeTableSession.session_token !== localStorage.getItem(sessionKey)) {
+        mount.innerHTML = `
+          <style>
+            @keyframes lockSlideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+            @keyframes pulseDanger { 0% { box-shadow: 0 0 0 0 rgba(225, 29, 72, 0.4); } 70% { box-shadow: 0 0 0 20px rgba(225, 29, 72, 0); } 100% { box-shadow: 0 0 0 0 rgba(225, 29, 72, 0); } }
+            @keyframes shakeIcon { 0%, 100% { transform: translateX(0); } 20% { transform: translateX(-4px) rotate(-4deg); } 40% { transform: translateX(4px) rotate(4deg); } 60% { transform: translateX(-4px) rotate(-4deg); } 80% { transform: translateX(4px) rotate(4deg); } }
+            .premium-lock-screen { display: flex; align-items: center; justify-content: center; min-height: 100vh; background: var(--paper, #FCFCF9); padding: 24px; font-family: inherit; }
+            .premium-lock-card { background: #ffffff; max-width: 440px; width: 100%; border-radius: 28px; padding: 48px 32px; box-shadow: 0 24px 48px rgba(18,34,22,0.06), 0 0 0 1px rgba(18,34,22,0.02); text-align: center; animation: lockSlideUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+            
+            /* Colorful Animated Gradient Icon */
+            .premium-lock-icon-danger { 
+                width: 96px; 
+                height: 96px; 
+                background: linear-gradient(135deg, #ff4b4b 0%, #e11d48 100%); 
+                border-radius: 28px; 
+                display: flex; 
+                align-items: center; 
+                justify-content: center; 
+                margin: 0 auto 24px; 
+                color: #ffffff; 
+                animation: pulseDanger 2.5s infinite, shakeIcon 0.6s ease-in-out 0.2s; 
+                box-shadow: 0 12px 24px rgba(225, 29, 72, 0.25); 
+            }
+            
+            .premium-lock-title { font-size: 1.85rem; font-weight: 900; color: var(--forest-950); letter-spacing: -0.02em; margin: 0 0 12px 0; }
+            .premium-lock-desc { color: var(--forest-700); font-size: 1rem; line-height: 1.5; margin: 0 0 32px 0; }
+            .try-again-btn { width: 100%; border-radius: 12px; height: 52px; display: flex; align-items: center; justify-content: center; gap: 8px; background: #ffffff; border: 1px solid var(--line); color: var(--forest-900); font-size: 1rem; font-weight: 800; cursor: pointer; transition: background 0.2s, transform 0.1s; }
+            .try-again-btn:active { transform: scale(0.98); }
+          </style>
+          <main class="premium-lock-screen">
+            <div class="premium-lock-card">
+              <div class="premium-lock-icon-danger">
+                <!-- Using a universally supported Phosphor icon with drop shadow -->
+                <i class="ph-fill ph-hand-palm" style="font-size: 48px; filter: drop-shadow(0px 2px 4px rgba(0,0,0,0.2));"></i>
+              </div>
+              <h1 class="premium-lock-title">Table Occupied</h1>
+              <p class="premium-lock-desc">Table ${currentTableObj.table_no} is currently in use by another guest's device.</p>
+              
+              <button class="try-again-btn" onclick="window.location.reload()"><i class="ph-bold ph-arrows-clockwise" style="font-size: 20px;"></i> Try Again</button>
+            </div>
+          </main>
+        `;
+        return () => {};
+    }
+
+    // 3. Bootstrap secure customer session
     const { data: sessionBootstrap, error: sessionError } = await supabase.rpc("ensure_customer_session", { p_table_id: currentTableObj.id });
     if (sessionError) throw sessionError;
     
@@ -247,13 +377,54 @@ export async function render({ mount }) {
 
   realtimeChannel = supabase.channel(`live-orders-${crypto.randomUUID()}`)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "orders" }, payload => {
-        // Trigger red dot ONLY for customer self-orders!
         if (payload.new?.note === "Customer Self-Order") {
            if (window.triggerAdminNotification) window.triggerAdminNotification();
         }
+        window.dispatchEvent(new Event("ff_live_update"));
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "order_items" }, payload => {
+        // SUPER LIVE SYNC: Instantly update the customer's Live Tab when Admin adds items!
+        window.dispatchEvent(new Event("ff_live_update"));
       })
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "dining_sessions" }, payload => {
-        // Suppressed default success toasts due to global override, but we keep the listener structure active
+        if (isCustomerMode && payload.new?.status === "closed" && payload.new?.table_id === currentTableObj.id) {
+           
+           document.querySelectorAll('.app-modal').forEach(m => m.remove());
+           document.body.classList.remove('modal-open');
+           
+           document.getElementById("app").innerHTML = `
+              <style>
+                @keyframes tyAmbientGlow { 0% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } 100% { background-position: 0% 50%; } }
+                @keyframes tyCardEnter { 0% { opacity: 0; transform: translateY(40px) scale(0.98); box-shadow: 0 0 0 rgba(0,0,0,0); } 100% { opacity: 1; transform: translateY(0) scale(1); box-shadow: 0 24px 48px rgba(18, 34, 22, 0.08), 0 0 0 1px rgba(18, 34, 22, 0.03); } }
+                @keyframes tyLogoReveal { 0% { opacity: 0; transform: scale(0.5) rotate(-15deg); } 50% { opacity: 1; transform: scale(1.1) rotate(5deg); } 100% { opacity: 1; transform: scale(1) rotate(0deg); } }
+                @keyframes tyFloat { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
+                @keyframes tyTextFade { 0% { opacity: 0; transform: translateY(15px); } 100% { opacity: 1; transform: translateY(0); } }
+                @keyframes tyLineDraw { 0% { width: 0; opacity: 0; } 100% { width: 48px; opacity: 1; } }
+
+                .ty-wrapper { position: fixed; inset: 0; z-index: 9999; display: flex; align-items: center; justify-content: center; padding: 24px; background: linear-gradient(120deg, #fdfbf7, #f4f7f5, #fdf8ed); background-size: 200% 200%; animation: tyAmbientGlow 8s ease infinite; }
+                .ty-card { background: #ffffff; border-radius: 32px; padding: 64px 40px; text-align: center; max-width: 480px; width: 100%; position: relative; overflow: hidden; opacity: 0; animation: tyCardEnter 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+                .ty-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 6px; background: linear-gradient(90deg, var(--gold-400), var(--gold-500), var(--gold-400)); }
+                .ty-logo-wrap { width: 110px; height: 110px; margin: 0 auto 32px; display: flex; align-items: center; justify-content: center; background: #f8faf9; border-radius: 50%; border: 1px solid rgba(18, 34, 22, 0.04); opacity: 0; animation: tyLogoReveal 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) 0.1s forwards, tyFloat 4s ease-in-out 1s infinite; }
+                .ty-logo-wrap img { width: 64px; height: auto; object-fit: contain; }
+                .ty-title { font-size: 2.5rem; font-weight: 900; color: var(--forest-950); letter-spacing: -0.02em; margin: 0 0 16px; opacity: 0; animation: tyTextFade 0.6s cubic-bezier(0.16, 1, 0.3, 1) 0.3s forwards; }
+                .ty-subtitle { font-size: 1.15rem; color: var(--forest-800); line-height: 1.5; font-weight: 500; margin: 0 0 32px; opacity: 0; animation: tyTextFade 0.6s cubic-bezier(0.16, 1, 0.3, 1) 0.4s forwards; }
+                .ty-divider { height: 3px; background: var(--gold-500); margin: 0 auto 32px; border-radius: 2px; opacity: 0; animation: tyLineDraw 0.6s cubic-bezier(0.16, 1, 0.3, 1) 0.5s forwards; }
+                .ty-footer { font-size: 1rem; color: var(--forest-600); line-height: 1.6; margin: 0; opacity: 0; animation: tyTextFade 0.6s cubic-bezier(0.16, 1, 0.3, 1) 0.6s forwards; }
+              </style>
+              <div class="ty-wrapper">
+                 <div class="ty-card">
+                    <div class="ty-logo-wrap">
+                      <img src="${versionedAsset("assets/images/website_icon.svg")}" alt="Four Flavours Logo">
+                    </div>
+                    <h1 class="ty-title">Thank You!</h1>
+                    <p class="ty-subtitle">Your bill is on the way to your table.</p>
+                    <div class="ty-divider"></div>
+                    <p class="ty-footer">We hope you enjoyed your time at Four Flavours.<br>Please wait while our staff attends to you.</p>
+                 </div>
+              </div>
+           `;
+        }
+        window.dispatchEvent(new Event("ff_live_update"));
       })
       .subscribe(status => { const node = mount.querySelector("#pos-connection"); if (!node) return; const live = status === "SUBSCRIBED"; node.innerHTML = `<span class="connection-dot ${live ? "live" : "offline"}"></span>${live ? "Live" : "Offline"}`; });
 
@@ -763,45 +934,11 @@ export async function render({ mount }) {
   }
 
   async function submitPOSOrder(closeModal, errorBoxElement = null) {
-    // Mute notifications so the staff device doesn't self-alert
     if (!isCustomerMode) window.__STAFF_MUTED_UNTIL = Date.now() + 3000;
     
     const current = state.getState();
     const posSessionKey = current.orderType === "dine_in" ? current.tableId : "takeaway_session";
-    let openOrderId = activeTableOrders[posSessionKey];
 
-    // SANITY CHECK 1: Destroy corrupted memory cache
-    if (openOrderId === "undefined" || !openOrderId) {
-        openOrderId = null;
-        delete activeTableOrders[posSessionKey];
-    }
-
-    // SANITY CHECK 2: Prevent Duplicate Ghost Orders
-    // If local memory is empty but this is a Dine-in table, securely locate the master active order!
-    if (!openOrderId && current.orderType === "dine_in" && current.tableId) {
-        const { data: activeSession } = await supabase.from("dining_sessions")
-            .select("id")
-            .eq("table_id", current.tableId)
-            .in("status", ["open", "bill_requested"])
-            .maybeSingle();
-            
-        if (activeSession) {
-            const { data: existingOrder } = await supabase.from("orders")
-                .select("id")
-                .eq("session_id", activeSession.id)
-                .neq("status", "cancelled")
-                .order("created_at", { ascending: false })
-                .limit(1)
-                .maybeSingle();
-                
-            if (existingOrder) {
-                openOrderId = existingOrder.id;
-                activeTableOrders[posSessionKey] = openOrderId; // Restore the cache
-            }
-        }
-    }
-
-    // MAP THE NEW CART ITEMS
     let safeServerItems = current.items.map(i => ({
       id: i.id,
       product_id: i.id,
@@ -814,95 +951,52 @@ export async function render({ mount }) {
 
     try {
       let result;
-      if (openOrderId) {
-        
-        // INTELLIGENT MERGE: Fetch existing kitchen items so we don't accidentally wipe them
-        const { data: existingItems } = await supabase.from("order_items").select("*").eq("order_id", openOrderId);
-        
-        if (existingItems && existingItems.length > 0) {
-            const mergedMap = new Map();
-            
-            // Step A: Load existing DB items into the map
-            existingItems.forEach(item => {
-                mergedMap.set(item.product_id, {
-                    id: item.product_id,
-                    product_id: item.product_id,
-                    name: item.name_snapshot,
-                    name_snapshot: item.name_snapshot,
-                    price: item.unit_price,
-                    unit_price: item.unit_price,
-                    quantity: item.quantity
-                });
-            });
-            
-            // Step B: Add new cart items on top (stacking quantities if they ordered the same thing again)
-            safeServerItems.forEach(newItem => {
-                if (mergedMap.has(newItem.product_id)) {
-                    mergedMap.get(newItem.product_id).quantity += newItem.quantity;
-                } else {
-                    mergedMap.set(newItem.product_id, newItem);
-                }
-            });
-            
-            // Export the perfectly merged list to be sent to the database
-            safeServerItems = Array.from(mergedMap.values());
-        }
+      
+      if (isCustomerMode) {
+          const token = customerSessionToken || localStorage.getItem(`fourflavours.session.${current.tableId}`);
+          if (!token) throw new Error("Security session expired. Please rescan the QR code.");
 
-        const { data, error } = await supabase.rpc("sync_pos_order", { p_order_id: openOrderId, p_items: safeServerItems });
-        if (error) throw error;
-
-        result = data?.[0] ?? data;
-        if (!result || !result.id) {
-           result = { id: openOrderId, order_number: result?.order_number || "Updated" };
-        }
+          const { data, error } = await supabase.rpc("submit_customer_order", {
+              p_table_id: current.tableId,
+              p_session_token: token,
+              p_items: safeServerItems
+          });
+          if (error) throw error;
+          result = data?.[0] ?? data;
+          
       } else {
-        const { data, error } = await supabase.rpc("create_pos_order", { p_order_type: current.orderType, p_table_id: current.tableId, p_items: safeServerItems, p_note: isCustomerMode ? "Customer Self-Order" : null });
-        if (error) throw error;
-
-        result = data?.[0] ?? data;
-        if (!result?.order_number) throw new Error("The restaurant did not return an order number.");
-
-        if (!result.id) {
-            const { data: dbOrder, error: fetchErr } = await supabase.from("orders").select("id").eq("order_number", result.order_number).order("created_at", { ascending: false }).limit(1).single();
-            if (dbOrder) {
-                result.id = dbOrder.id;
-            } else {
-                throw new Error("Order created but ID could not be located in the database.");
-            }
-        }
+          // STAFF MODE: The backend now natively prevents duplicates and appends items!
+          const { data, error } = await supabase.rpc("create_pos_order", { 
+              p_order_type: current.orderType, 
+              p_table_id: current.tableId, 
+              p_items: safeServerItems, 
+              p_note: "Staff Order" 
+          });
+          if (error) throw error;
+          result = data?.[0] ?? data;
       }
 
-      const wasNewOrder = !openOrderId;
+      const wasNewOrder = !activeTableOrders[posSessionKey];
       activeTableOrders[posSessionKey] = result.id;
       state.clear();
       closeModal();
       
       if (isCustomerMode) {
-          // EXPLICIT BROADCAST: Tell the admin instantly
-          adminAlertChannel.send({ 
-              type: 'broadcast', 
-              event: 'customer_order', 
-              payload: { tableId: current.tableId, isNew: wasNewOrder } 
-          });
-
-          // Show dashboard immediately but pass the flag to trigger the gorgeous inline chef animation!
+          adminAlertChannel.send({ type: 'broadcast', event: 'customer_order', payload: { tableId: current.tableId, isNew: wasNewOrder } });
           showActiveOrderDashboard({ order: result, settings, current_state: current, sessionKey: posSessionKey, showPrepAnimation: true });
       } else {
           showActiveOrderDashboard({ order: result, settings, current_state: current, sessionKey: posSessionKey });
       }
-
       return true;
 
     } catch (error) {
       console.error("Order Submission Error:", error);
-
       if (errorBoxElement) {
           errorBoxElement.innerHTML = `<i class="ph-bold ph-warning-circle"></i><span><strong>Order failed</strong><br>${escapeHtml(error.message)}</span>`;
           errorBoxElement.style.display = "flex";
       } else {
           showToast("Order failed", error.message, "error");
       }
-
       return false;
     }
   }
@@ -959,8 +1053,8 @@ export async function render({ mount }) {
                               // EXPLICIT BROADCAST
                               adminAlertChannel.send({ type: 'broadcast', event: 'customer_bill', payload: { tableId: current_state.tableId } });
                               
-                              // CRITICAL FIX: Wipe local storage so the table becomes FREE for the next scan!
-                              localStorage.removeItem(`fourflavours.session.${current_state.tableId}`);
+                              // MEMORY PRESERVED: We intentionally leave the token in localStorage. 
+                              // This allows the Bootstrapper to recognize them and lock them out if they go home!
                             } else {
                           const { data: sess } = await supabase.from("dining_sessions").select("id").eq("table_id", current_state.tableId).in("status", ["open", "bill_requested"]).maybeSingle();
                           if (sess) {
@@ -1017,8 +1111,17 @@ export async function render({ mount }) {
     });
 
     let syncTimer = setInterval(fetchLiveSession, 3000);
+    
+    // Super-Live WebSocket Hook: Fetch instantly when the database changes!
+    const liveUpdateHandler = () => fetchLiveSession();
+    window.addEventListener("ff_live_update", liveUpdateHandler);
+    
     const originalClose = modal.close;
-    modal.close = () => { clearInterval(syncTimer); originalClose(); };
+    modal.close = () => { 
+        clearInterval(syncTimer); 
+        window.removeEventListener("ff_live_update", liveUpdateHandler);
+        originalClose(); 
+    };
 
     async function fetchLiveSession() {
       const host = modal.root.querySelector("#active-dash-host");
@@ -1047,27 +1150,25 @@ export async function render({ mount }) {
          .limit(1)
          .maybeSingle();
 
-      // AUTO-RESET: If the session was closed, safely wipe local storage.
-      // CRITICAL FIX: Only force the page reload if it is a CUSTOMER device!
+      // SECURE AUTO-CLOSE: If the session was closed by Admin, gracefully close the modal.
+      // The global realtime listener will instantly transition the app to the Thank You screen!
       if (activeSession && activeSession.status === "closed") {
-         if (isCustomerMode) {
-             localStorage.removeItem(`fourflavours.session.${current_state.tableId}`);
-             customerSessionToken = null;
-             
-             // If they are viewing the old tab, force a hard reload to clear the UI.
-             if (!document.querySelector(".thank-you-screen")) {
-                window.location.reload();
-             }
-         }
-         return; // Safely halt the sync loop for staff without reloading their page
+         modal.close();
+         return; 
       }
 
       if (activeSession && ["open", "bill_requested", "bill_ready"].includes(activeSession.status)) {
          const { data } = await supabase.from("orders").select("*, order_items(*)").eq("session_id", activeSession.id).neq("status", "cancelled").order("created_at", { ascending: true });
-         if (data) processOrders(data);
+         if (data) {
+             // DEEP FIX 1: Restore local cache on reload so future additions append to the active order instead of creating duplicates!
+             if (data.length > 0) activeTableOrders[sessionKey] = data[data.length - 1].id;
+             processOrders(data);
+         }
       } else {
-         const { data } = await supabase.from("orders").select("*, order_items(*)").eq("id", rootOrder.id).single();
-         if (data) processOrders([data]);
+         if (rootOrder && rootOrder.id && rootOrder.id !== "undefined") {
+             const { data } = await supabase.from("orders").select("*, order_items(*)").eq("id", rootOrder.id).single();
+             if (data) processOrders([data]);
+         }
       }
     }
 
@@ -1250,7 +1351,7 @@ export async function render({ mount }) {
       subtitle: isCustomerMode ? "Please pay at the counter or show this to your waiter." : "Review the generated bill before printing.",
       body: `<div class="receipt-preview-container">${receiptHTML}</div>`,
       actions: isCustomerMode ? [
-        { label: "Close & Start New Order", icon: "ph-check", className: "btn-primary", onClick: ({ close }) => { close(); window.location.reload(); } }
+        { label: "Exit Receipt", icon: "ph-check", className: "btn-primary", onClick: ({ close }) => { close(); window.location.reload(); } }
       ] : [
         { label: "Close", icon: "ph-x", className: "btn-quiet", onClick: ({ close }) => close() },
         { label: "Print Bill", icon: "ph-printer", className: "btn-primary", onClick: () => {

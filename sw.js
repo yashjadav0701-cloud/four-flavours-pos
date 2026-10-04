@@ -1,4 +1,4 @@
-const CACHE_NAME = "four-flavours-v5";
+const CACHE_NAME = "four-flavours-v6";
 
 self.addEventListener("install", (event) => {
   self.skipWaiting();

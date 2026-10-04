@@ -24,6 +24,29 @@ export async function renderRoute(mount) {
 
   mount.innerHTML = `<section class="loading-screen"><div class="loading-mark"><span></span><span></span><span></span></div></section>`;
 
+  // TIER 1 SECURITY: Block POS and Admin from unauthorized access
+  if (route.name !== "customer") {
+    const { getSession } = await import("./supabase.js");
+    const session = await getSession();
+    
+    // Check if there is a session AND it is actively verified for this specific browser tab session
+    const isSessionVerified = session && sessionStorage.getItem("ff_staff_active") === "true";
+    
+    if (!isSessionVerified) {
+       const { renderStaffLogin } = await import("../components/lockScreen.js");
+       const cleanup = await renderStaffLogin({
+           mount,
+           onLogin: () => {
+               // Mark this browser tab as securely authenticated
+               sessionStorage.setItem("ff_staff_active", "true");
+               window.dispatchEvent(new Event("fourflavours:navigate"));
+           }
+       });
+       activeCleanup = typeof cleanup === "function" ? cleanup : null;
+       return route;
+    }
+  }
+
   const view = await moduleFor(route.name);
   if (typeof view.render !== "function") throw new Error(`View ${route.name} must export render().`);
   const cleanup = await view.render({ mount, route });
@@ -34,6 +57,14 @@ export async function renderRoute(mount) {
 export function startRouter({ mount }) {
   if (started) return;
   started = true;
+
+  // STRICT SECURITY: Force sign-out on fresh launch (new tab/window) to ensure staff always log in
+  const isCustomer = new URLSearchParams(location.search).has("table");
+  if (!isCustomer && !sessionStorage.getItem("ff_staff_active")) {
+     import("./supabase.js").then(({ supabase }) => {
+         if (supabase) supabase.auth.signOut();
+     });
+  }
 
   const rerender = () => renderRoute(mount).catch(error => {
     console.error(error);

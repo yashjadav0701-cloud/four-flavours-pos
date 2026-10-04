@@ -86,6 +86,14 @@ export function showToast(title, message, type = "success") {
 
 export function mountNavigation({ active = "pos" }) {
   const root = document.createElement("div");
+  
+  // Dynamic Contextual Configuration
+  const isPos = active === "pos";
+  const actionIcon = isPos ? "ph-sign-out" : "ph-lock-key";
+  const actionText = isPos ? "Sign Out" : "Lock & Return to POS";
+  const actionColor = isPos ? "var(--danger)" : "var(--forest-900)";
+  const actionId = isPos ? "staff-sign-out" : "admin-lock-workspace";
+
   root.innerHTML = `
     <div class="drawer-overlay" data-drawer-overlay></div>
     <aside class="app-drawer" data-app-drawer aria-label="Application navigation">
@@ -95,18 +103,42 @@ export function mountNavigation({ active = "pos" }) {
         <button class="icon-btn icon-btn-dark" data-close-drawer title="Close menu" aria-label="Close menu"><i class="ph ph-x"></i></button>
       </div>
       <nav class="drawer-nav">
-        <button class="drawer-nav-item ${active === "pos" ? "active" : ""}" data-route="/"><i class="ph ph-storefront"></i><span>POS</span></button>
+        <button class="drawer-nav-item ${isPos ? "active" : ""}" data-route="/"><i class="ph-bold ph-storefront"></i><span>POS</span></button>
         <button class="drawer-nav-item ${active === "admin" ? "active" : ""}" data-route="#/4">
-          <i class="ph ph-shield-check"></i><span>Admin</span>
+          <i class="ph-bold ph-shield-check"></i><span>Admin</span>
           <span id="admin-drawer-dot" style="width: 8px; height: 8px; border-radius: 50%; background: #e11d48; margin-left: auto; display: none;"></span>
         </button>
       </nav>
+      <div class="drawer-foot" style="margin-top: auto; padding-bottom: 24px;">
+         <button class="btn btn-quiet" id="${actionId}" style="width: 100%; border-color: var(--line); color: ${actionColor}; font-weight: 800;"><i class="ph-bold ${actionIcon}"></i> ${actionText}</button>
+      </div>
     </aside>`;
   document.body.appendChild(root);
 
   const drawer = root.querySelector("[data-app-drawer]");
   const overlay = root.querySelector("[data-drawer-overlay]");
   const setOpen = open => { drawer.classList.toggle("open", open); overlay.classList.toggle("open", open); document.body.classList.toggle("drawer-open", open); };
+
+  // Secure Contextual Button Logic
+  root.querySelector(`#${actionId}`)?.addEventListener("click", async () => {
+      setOpen(false); // Instantly close the drawer for a snappy feel
+      
+      if (isPos) {
+          // POS MODE: Hard Sign-Out
+          try {
+             sessionStorage.removeItem("ff_staff_active");
+             await signOut(); 
+             window.location.reload(); 
+          } catch (err) {
+             console.error("Sign out failed:", err);
+          }
+      } else {
+          // ADMIN MODE: Lock Workspace & Return to POS floor
+          history.pushState({}, "", location.pathname);
+          location.hash = "";
+          window.dispatchEvent(new Event("fourflavours:navigate"));
+      }
+  });
 
   root.addEventListener("click", async event => {
     const routeButton = event.target.closest("[data-route]");
