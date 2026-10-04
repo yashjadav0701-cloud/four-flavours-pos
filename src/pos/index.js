@@ -163,25 +163,6 @@ export async function render({ mount }) {
       </div>
 
       <main class="pos-content">
-        ${isCustomerMode ? '' : `
-          <section class="pos-toolbar-row" style="display: flex; justify-content: center; width: 100%; gap: 8px; margin-bottom: 16px; flex-wrap: nowrap; overflow-x: auto;">
-            <button class="pos-toolbar-pill active" data-order-type="dine_in" style="height: 44px; padding: 0 14px; font-size: 14px; font-weight: 800; gap: 7px; border-radius: 12px; border: 1px solid transparent; white-space: nowrap; flex-shrink: 0;">
-              <i class="ph-bold ph-fork-knife" style="font-size: 18px; line-height: 1;"></i>
-              <span style="white-space: nowrap;">Dine-in</span>
-            </button>
-            <button class="pos-toolbar-pill" data-order-type="takeaway" style="height: 44px; padding: 0 14px; font-size: 14px; font-weight: 800; gap: 7px; border-radius: 12px; border: 1px solid var(--line); color: var(--forest-800); white-space: nowrap; flex-shrink: 0;">
-              <i class="ph-bold ph-shopping-bag" style="font-size: 18px; color: var(--forest-800); line-height: 1;"></i>
-              <span style="white-space: nowrap;">Takeaway</span>
-            </button>
-            <div class="pos-toolbar-pill" id="pos-table-wrap" style="height: 44px; padding: 0 14px; font-size: 14px; font-weight: 800; gap: 7px; border-radius: 12px; border: 1px solid var(--line); color: var(--forest-800); white-space: nowrap; flex-shrink: 0;">
-              <span class="selected-text" id="pos-table-display" style="display: inline-flex; align-items: center; gap: 7px; font-size: 14px; font-weight: 800; color: var(--forest-800); white-space: nowrap;">
-                <i class="ph-bold ph-armchair" style="font-size: 18px; color: var(--forest-800); line-height: 1;"></i>
-                <span style="white-space: nowrap;">Table</span>
-                <i class="ph-bold ph-caret-down" style="font-size: 16px; color: var(--forest-800); line-height: 1;"></i>
-              </span>
-            </div>
-          </section>
-        `}
         <div id="pos-dynamic-area"></div>
       </main>
 
@@ -218,74 +199,10 @@ export async function render({ mount }) {
 
   searchInput.addEventListener("input", event => { searchTerm = event.target.value.trim().toLowerCase(); renderProducts(); });
   
-  if (!isCustomerMode) {
-    const tableDisplay = mount.querySelector("#pos-table-display span");
-    const tableWrapBtn = mount.querySelector("#pos-table-wrap");
-    let autoOpenReview = false;
-
-    tableWrapBtn.addEventListener("click", (e) => {
-      if (state.getState().orderType === "takeaway") return;
-      
-      autoOpenReview = e.isTrusted === false || window._autoReviewPending;
-      window._autoReviewPending = false;
-
-      // 1. OPEN INSTANTLY: Give the user immediate tactile feedback without waiting for the DB
-      const modal = openAppModal({
-        title: "Select Table",
-        subtitle: "Assign a table for this dine-in session. Occupied tables are hidden.",
-        body: `<div id="table-selection-host" style="max-height: 50vh; overflow-y: auto; margin: -10px -24px;"><div class="empty-state"><i class="ph ph-spinner-gap ph-spin"></i><span>Finding free tables...</span></div></div>`,
-        actions: [{ label: "Cancel", icon: "ph-x", className: "btn-quiet", onClick: (ctx) => { autoOpenReview = false; ctx.close(); } }]
-      });
-
-      // 2. FETCH IN BACKGROUND: Now query the database asynchronously
-      supabase.from("dining_sessions").select("table_id").in("status", ["open", "bill_requested", "bill_ready"])
-        .then(({ data: activeSessions }) => {
-          const occupiedIds = new Set((activeSessions || []).map(s => s.table_id));
-          const freeTables = tables.filter(t => !occupiedIds.has(t.id));
-          
-          const host = modal.root.querySelector("#table-selection-host");
-          if (!host) return; // In case they closed it before it loaded
-
-          host.innerHTML = freeTables.length ? freeTables.map(t => `
-            <button class="btn btn-quiet table-select-btn" data-table-id="${t.id}" style="width: 100%; border-radius: 0; justify-content: flex-start; padding: 18px 24px; font-size: 16px; border-bottom: 1px solid var(--line); transition: background 0.15s;">
-              <i class="ph-bold ph-armchair" style="color: var(--forest-600); margin-right: 14px; font-size: 20px;"></i>
-              <strong style="color: var(--forest-950);">Table ${escapeHtml(t.table_no)}</strong>
-              <span style="margin-left: auto; font-size: 13px; font-weight: 700; color: var(--muted);">${t.capacity} seats</span>
-            </button>
-          `).join("") : `<div class="empty-state"><i class="ph-bold ph-armchair"></i><strong>No free tables</strong><span>All tables are currently occupied.</span></div>`;
-
-          host.querySelectorAll(".table-select-btn").forEach(btn => {
-            btn.addEventListener("click", () => {
-              const table = tables.find(t => t.id === btn.dataset.tableId) ?? null;
-              state.setTable(table);
-              tableDisplay.textContent = table ? `Table ${table.table_no}` : "Table";
-              modal.close();
-              
-              if (autoOpenReview && state.getState().items.length > 0) {
-                autoOpenReview = false;
-                openReview();
-              }
-            });
-          });
-        })
-        .catch(err => {
-          console.error(err);
-          const host = modal.root.querySelector("#table-selection-host");
-          if (host) host.innerHTML = `<div class="empty-state"><i class="ph ph-warning-circle"></i><strong>Error loading tables</strong><span>Please try again.</span></div>`;
-        });
-    });
-    
-    mount.querySelectorAll("[data-order-type]").forEach(button => button.addEventListener("click", () => { 
-      state.setOrderType(button.dataset.orderType); 
-      mount.querySelectorAll("[data-order-type]").forEach(el => el.classList.toggle("active", el === button)); 
-      tableWrapBtn.classList.toggle("is-disabled", button.dataset.orderType === "takeaway"); 
-      if (button.dataset.orderType === "takeaway") {
-        state.setTable(null);
-        tableDisplay.textContent = "Table";
-      }
-    }));
-  } else {
+  if (isCustomerMode) {
     mount.querySelector("#customer-live-tab").addEventListener("click", openLiveTabDashboard);
+  } else {
+    state.setOrderType("dine_in");
   }
   
   mount.querySelector("#pos-next").addEventListener("click", openReview);
@@ -303,10 +220,25 @@ export async function render({ mount }) {
       .in("status", ["open", "bill_requested", "bill_ready"])
       .maybeSingle();
 
-    if (!session) return showToast("Tab is empty", "Add items to your cart and tap Next to start a tab.");
+    if (!session) {
+       return openAppModal({
+          title: "Your Tab is Empty",
+          subtitle: "You haven't sent any items to the kitchen yet.",
+          body: `<div class="empty-state"><i class="ph-bold ph-receipt"></i><strong>Nothing here yet</strong><span>Add dishes to your cart and tap "Next" to start your order.</span></div>`,
+          actions: [{ label: "Browse Menu", icon: "ph-arrow-left", className: "btn-primary", onClick: ({ close }) => close() }]
+       });
+    }
 
     const { data: order } = await supabase.from("orders").select("*").eq("session_id", session.id).limit(1).maybeSingle();
-    if (!order) return showToast("Tab is empty", "Add items to your cart and tap Next to start a tab.");
+    
+    if (!order) {
+       return openAppModal({
+          title: "Your Tab is Empty",
+          subtitle: "You haven't sent any items to the kitchen yet.",
+          body: `<div class="empty-state"><i class="ph-bold ph-receipt"></i><strong>Nothing here yet</strong><span>Add dishes to your cart and tap "Next" to start your order.</span></div>`,
+          actions: [{ label: "Browse Menu", icon: "ph-arrow-left", className: "btn-primary", onClick: ({ close }) => close() }]
+       });
+    }
 
     showActiveOrderDashboard({ order, settings, current_state: { tableId, orderType: "dine_in" }, sessionKey: tableId });
   }
@@ -360,6 +292,25 @@ export async function render({ mount }) {
     if (!activeCuisine && !searchTerm) {
       area.innerHTML = `
         <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: calc(100vh - 180px); padding-bottom: 20px;">
+          ${isCustomerMode ? '' : `
+            <section class="pos-toolbar-row" style="display: flex; justify-content: center; width: 100%; gap: 8px; margin-bottom: 20px; flex-wrap: nowrap; overflow-x: auto;">
+              <button class="pos-toolbar-pill ${state.getState().orderType === 'dine_in' ? 'active' : ''}" data-order-type="dine_in" style="height: 44px; padding: 0 14px; font-size: 14px; font-weight: 800; gap: 7px; border-radius: 12px; border: 1px solid ${state.getState().orderType === 'dine_in' ? 'transparent' : 'var(--line)'}; white-space: nowrap; flex-shrink: 0;">
+                <i class="ph-bold ph-fork-knife" style="font-size: 18px; line-height: 1;"></i>
+                <span style="white-space: nowrap;">Dine-in</span>
+              </button>
+              <button class="pos-toolbar-pill ${state.getState().orderType === 'takeaway' ? 'active' : ''}" data-order-type="takeaway" style="height: 44px; padding: 0 14px; font-size: 14px; font-weight: 800; gap: 7px; border-radius: 12px; border: 1px solid ${state.getState().orderType === 'takeaway' ? 'transparent' : 'var(--line)'}; color: var(--forest-800); white-space: nowrap; flex-shrink: 0;">
+                <i class="ph-bold ph-shopping-bag" style="font-size: 18px; color: var(--forest-800); line-height: 1;"></i>
+                <span style="white-space: nowrap;">Takeaway</span>
+              </button>
+              <div class="pos-toolbar-pill ${!state.getState().tableId && state.getState().orderType === 'dine_in' ? '' : 'has-table'}" id="pos-table-wrap" style="height: 44px; padding: 0 14px; font-size: 14px; font-weight: 800; gap: 7px; border-radius: 12px; border: 1px solid var(--line); color: var(--forest-800); white-space: nowrap; flex-shrink: 0; cursor: pointer;">
+                <span class="selected-text" id="pos-table-display" style="display: inline-flex; align-items: center; gap: 7px; font-size: 14px; font-weight: 800; color: var(--forest-800); white-space: nowrap;">
+                  <i class="ph-bold ph-armchair" style="font-size: 18px; color: var(--forest-800); line-height: 1;"></i>
+                  <span style="white-space: nowrap;">${state.getState().tableId ? `Table ${tables.find(t => t.id === state.getState().tableId)?.table_no || ''}` : 'Table'}</span>
+                  <i class="ph-bold ph-caret-down" style="font-size: 16px; color: var(--forest-800); line-height: 1;"></i>
+                </span>
+              </div>
+            </section>
+          `}
           <div class="drill-down-header" style="text-align: center; margin-bottom: 24px; width: 100%;">
             <h2 style="font-size: 22px;">Choose a Cuisine</h2>
           </div>
@@ -380,23 +331,39 @@ export async function render({ mount }) {
 
       area.querySelectorAll("[data-cuisine]").forEach(card => {
         card.addEventListener("click", () => {
-          // 1. Add the tactile animation class immediately
           card.classList.add("pressed");
-          
-          // 2. Wait exactly 150ms for the physical "press" animation to visually complete
           setTimeout(() => {
             activeCuisine = card.dataset.cuisine;
             activeSubCategory = "All";
             searchTerm = "";
             const searchInput = mount.querySelector("#pos-search");
             if (searchInput) searchInput.value = "";
-            
-            // Push navigation state so the physical back button works
             window.history.pushState({ view: "cuisine", cuisine: activeCuisine }, "", "#" + encodeURIComponent(activeCuisine));
             renderProducts();
           }, 150);
         });
       });
+
+      // Wire toolbar listeners for the landing view
+      if (!isCustomerMode) {
+        const tableWrapBtn = area.querySelector("#pos-table-wrap");
+        tableWrapBtn?.addEventListener("click", () => {
+          if (state.getState().orderType === "takeaway") return;
+          promptTableSelection(() => {
+            renderProducts(); // Re-render to update table name badge
+          });
+        });
+
+        area.querySelectorAll("[data-order-type]").forEach(button => {
+          button.addEventListener("click", () => {
+            const oType = button.dataset.orderType;
+            state.setOrderType(oType);
+            if (oType === "takeaway") state.setTable(null);
+            renderProducts(); // Re-render to update active pill state
+          });
+        });
+      }
+
       return;
     }
 
@@ -686,19 +653,61 @@ export async function render({ mount }) {
     }
   }
 
+  function promptTableSelection(onSelected) {
+    const modal = openAppModal({
+      title: "Select Table",
+      subtitle: "Assign a table for this dine-in session. Occupied tables are hidden.",
+      body: `<div id="table-selection-host" style="max-height: 50vh; overflow-y: auto; margin: -10px -24px;"><div class="empty-state"><i class="ph ph-spinner-gap ph-spin"></i><span>Finding free tables...</span></div></div>`,
+      actions: [{ label: "Cancel", icon: "ph-x", className: "btn-quiet", onClick: (ctx) => ctx.close() }]
+    });
+
+    supabase.from("dining_sessions").select("table_id").in("status", ["open", "bill_requested", "bill_ready"])
+      .then(({ data: activeSessions }) => {
+        const occupiedIds = new Set((activeSessions || []).map(s => s.table_id));
+        const freeTables = tables.filter(t => !occupiedIds.has(t.id));
+        
+        const host = modal.root.querySelector("#table-selection-host");
+        if (!host) return;
+
+        host.innerHTML = freeTables.length ? freeTables.map(t => `
+          <button class="btn btn-quiet table-select-btn" data-table-id="${t.id}" style="width: 100%; border-radius: 0; justify-content: flex-start; padding: 18px 24px; font-size: 16px; border-bottom: 1px solid var(--line); transition: background 0.15s;">
+            <i class="ph-bold ph-armchair" style="color: var(--forest-600); margin-right: 14px; font-size: 20px;"></i>
+            <strong style="color: var(--forest-950);">Table ${escapeHtml(t.table_no)}</strong>
+            <span style="margin-left: auto; font-size: 13px; font-weight: 700; color: var(--muted);">${t.capacity} seats</span>
+          </button>
+        `).join("") : `<div class="empty-state"><i class="ph-bold ph-armchair"></i><strong>No free tables</strong><span>All tables are currently occupied.</span></div>`;
+
+        host.querySelectorAll(".table-select-btn").forEach(btn => {
+          btn.addEventListener("click", () => {
+            const table = tables.find(t => t.id === btn.dataset.tableId) ?? null;
+            state.setTable(table);
+            modal.close();
+            onSelected?.(table);
+          });
+        });
+      })
+      .catch(err => {
+        console.error(err);
+        const host = modal.root.querySelector("#table-selection-host");
+        if (host) host.innerHTML = `<div class="empty-state"><i class="ph ph-warning-circle"></i><strong>Error loading tables</strong><span>Please try again.</span></div>`;
+      });
+  }
+
   async function openReview() {
     const current = state.getState();
-    if (!state.canSubmit()) { 
-      if (current.orderType === "dine_in" && !current.tableId) {
-        window._autoReviewPending = true; 
-        const tableWrap = mount.querySelector("#pos-table-wrap");
-        if (tableWrap) {
-            tableWrap.click();
-            return;
-        }
-      }
+    
+    // 1. If cart is truly empty, show warning
+    if (!current.items || current.items.length === 0) { 
       showToast("Complete the order", "Add at least one dish.", "error"); 
       return; 
+    }
+
+    // 2. If items exist but table is missing for dine-in, seamlessly prompt table selection
+    if (!isCustomerMode && current.orderType === "dine_in" && !current.tableId) {
+      promptTableSelection(() => {
+        openReview();
+      });
+      return;
     }
     
     const sessionKey = current.orderType === "dine_in" ? current.tableId : "takeaway_session";

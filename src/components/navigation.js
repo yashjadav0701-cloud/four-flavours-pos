@@ -14,6 +14,8 @@ export function updateGlobalNotificationBadge() {
   if (drawerDot) drawerDot.style.display = show ? "block" : "none";
   hamburgerDots.forEach(dot => { dot.style.display = show ? "block" : "none"; });
 }
+// Attach to the global window so the Admin dashboard can securely trigger it
+window.updateGlobalNotificationBadge = updateGlobalNotificationBadge;
 
 export function clearGlobalNotification() {
   window.__unreadAdminCount = 0;

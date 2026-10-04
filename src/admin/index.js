@@ -909,8 +909,8 @@ async function renderAdminWorkspace(mount) {
            <button class="btn btn-quiet btn-small" id="clear-admin-alerts" style="background: #fff; border-color: var(--gold-400); color: var(--forest-900); font-weight: 800; cursor: pointer;">Clear Inbox</button>
          </div>
          <div class="quick-action-grid">
-           ${window.__adminAlerts.map(a => `
-             <button class="quick-action" ${a.tableId ? `data-alert-table-id="${escapeHtml(a.tableId)}"` : `data-go="orders"`} style="background: #fff; border-left: 4px solid var(--gold-500); grid-template-columns: minmax(0,1fr) auto; border-radius: 10px; cursor: pointer; padding: 12px;">
+           ${window.__adminAlerts.map((a, index) => `
+             <button class="quick-action" data-alert-index="${index}" ${a.tableId ? `data-alert-table-id="${escapeHtml(a.tableId)}"` : `data-go="orders"`} style="background: #fff; border-left: 4px solid var(--gold-500); grid-template-columns: minmax(0,1fr) auto; border-radius: 10px; cursor: pointer; padding: 12px;">
                 <div style="min-width: 0; text-align: left;">
                   <strong style="font-size: 14px; color: var(--forest-950);">${escapeHtml(a.title)}</strong>
                   <span style="display: block; font-size: 13px; color: var(--muted); margin-top: 2px;">${escapeHtml(a.message)}</span>
@@ -946,17 +946,32 @@ async function renderAdminWorkspace(mount) {
     
     area.querySelectorAll("[data-go]").forEach(b => b.addEventListener("click", () => { section = b.dataset.go; updateNavUI(); renderSection(); }));
     
-    // INTELLIGENT ALERT ROUTING
-    area.querySelectorAll("[data-alert-table-id]").forEach(btn => {
+    // INTELLIGENT ALERT ROUTING & DISMISSAL
+    area.querySelectorAll("[data-alert-index]").forEach(btn => {
       btn.addEventListener("click", () => {
+         // 1. Remove the alert from the inbox instantly
+         const idx = Number(btn.dataset.alertIndex);
+         if (window.__adminAlerts && window.__adminAlerts[idx]) {
+             window.__adminAlerts.splice(idx, 1);
+             window.__unreadAdminCount = window.__adminAlerts.length;
+             if (window.updateGlobalNotificationBadge) window.updateGlobalNotificationBadge();
+         }
+
+         // 2. Route to the correct destination
          const tId = btn.dataset.alertTableId;
-         const table = tables.find(x => x.id === tId);
-         const session = sessions.find(x => x.table_id === tId && x.status !== 'closed');
-         
-         if (table && session) {
-             openAdminTableManager(table, session);
+         if (tId) {
+             const table = tables.find(x => x.id === tId);
+             const session = sessions.find(x => x.table_id === tId && x.status !== 'closed');
+             
+             if (table && session) {
+                 openAdminTableManager(table, session);
+                 renderOverview(); // Update UI to hide the alert box seamlessly
+             } else {
+                 section = "orders"; 
+                 updateNavUI(); 
+                 renderSection();
+             }
          } else {
-             // Fallback: If table is Takeaway or session was already closed, go to Orders tab
              section = "orders"; 
              updateNavUI(); 
              renderSection();
@@ -980,23 +995,15 @@ async function renderAdminWorkspace(mount) {
 
   function renderMenu() {
     area.innerHTML = `
-      <section class="section-title-row menu-admin-heading">
-        <div class="menu-admin-heading-copy">
+      <section class="section-title-row" style="flex-wrap: wrap; gap: 16px;">
+        <div style="flex: 1; min-width: 280px;">
           <span class="eyebrow">Menu management</span>
           <h1>Every dish, neatly managed.</h1>
-          <p>The live menu stays here. Generate the complete print master from the button group below.</p>
+          <p>Long lists stay inside a contained vertical workspace instead of stretching the entire page.</p>
         </div>
-
-        <div class="menu-admin-actions" aria-label="Menu actions">
-          <button class="btn btn-quiet" id="generate-menu-pdf">
-            <i class="ph-bold ph-file-pdf"></i>
-            <span>Full Menu PDF</span>
-          </button>
-
-          <button class="btn btn-primary" id="add-product">
-            <i class="ph-bold ph-plus"></i>
-            <span>Add dish</span>
-          </button>
+        <div style="display: flex !important; flex-direction: row !important; gap: 12px !important; flex-wrap: nowrap !important; align-items: center; justify-content: flex-start; width: auto !important;">
+          <button class="btn btn-quiet" id="generate-menu-pdf" style="height: 44px; border-radius: 10px; font-weight: 800; padding: 0 20px; white-space: nowrap; border: 1px solid var(--forest-900); color: var(--forest-900); background: #ffffff; box-shadow: 0 2px 6px rgba(0,0,0,0.05); flex: 0 0 auto !important; width: auto !important;"><i class="ph-bold ph-file-pdf"></i> Full Menu PDF</button>
+          <button class="btn btn-primary" id="add-product" style="height: 44px; border-radius: 10px; font-weight: 800; padding: 0 20px; white-space: nowrap; flex: 0 0 auto !important; width: auto !important;"><i class="ph-bold ph-plus"></i> Add dish</button>
         </div>
       </section>
       <section class="admin-panel"><div class="panel-toolbar"><div class="search-wrap light"><i class="ph ph-magnifying-glass"></i><input class="search-input" id="product-search" type="search" placeholder="Search dishes or categories"></div><span class="soft-badge">${products.length} dishes</span></div><div class="admin-list-scroll" id="product-list"></div></section>`;
@@ -1075,10 +1082,14 @@ async function renderAdminWorkspace(mount) {
       }
 
       const columnsHtml = targetCuisines.map(cuisineName => {
-         // Proportional Flex Weight
          const flexWeight = Math.max(12, cuisineItemCounts[cuisineName]);
          
-         const subCats = Object.keys(menuTree[cuisineName]).sort();
+         // THE PACKING ALGORITHM: Sort subcategories by Item Count (Descending)
+         // This guarantees the largest lists fill the primary columns on the left first, eliminating massive empty spaces!
+         const subCats = Object.keys(menuTree[cuisineName]).sort((a, b) => {
+             return menuTree[cuisineName][b].length - menuTree[cuisineName][a].length;
+         });
+
          if (subCats.length === 0) return `<div class="a0-cuisine-col" style="flex: ${flexWeight};"><h2 class="a0-cuisine-title">${escapeHtml(cuisineName)}</h2><div style="text-align: center; color: var(--muted); font-size: 24px;">Coming Soon</div></div>`;
          
          const subCatsHtml = subCats.map(subCat => {
@@ -1099,13 +1110,13 @@ async function renderAdminWorkspace(mount) {
             return `<div class="a0-subcat-wrap"><h3 class="a0-subcat-title"><i class="ph-fill ${getSubcatIcon(subCat)}"></i> ${escapeHtml(subCat)}</h3>${itemsHtml}</div>`;
          }).join("");
          
-         return `<div class="a0-cuisine-col" style="flex: ${flexWeight};"><h2 class="a0-cuisine-title">${escapeHtml(cuisineName)}</h2><div class="a0-stack-wrapper">${subCatsHtml}</div></div>`;
+         return `<div class="a0-cuisine-col" style="flex: ${flexWeight};"><h2 class="a0-cuisine-title">${escapeHtml(cuisineName)}</h2><div class="a0-masonry-wrapper">${subCatsHtml}</div></div>`;
       }).join("");
 
       const canvasHtml = `
          <div class="a0-canvas" id="a0-print-target">
             <header class="a0-header">
-               <img src="${versionedAsset("assets/images/website_logo.png")}" class="a0-logo" alt="Logo">
+               <div class="a0-logo-box"><img src="${versionedAsset("assets/images/website_logo.png")}" class="a0-logo" alt="Logo"></div>
             </header>
             <div class="a0-grid">
                ${columnsHtml}
@@ -1120,8 +1131,9 @@ async function renderAdminWorkspace(mount) {
          body: `<div class="a0-preview-viewport" id="a0-preview-viewport">${canvasHtml}</div>`,
          actions: [
             { label: "Close", icon: "ph-x", className: "btn-quiet", onClick: ({ close }) => close() },
-            { label: "Download PDF", icon: "ph-download-simple", className: "btn-primary", onClick: async ({ root, button }) => {
-               const originalElement = root.querySelector("#a0-print-target");
+            { label: "Download High-Res PDF", icon: "ph-download-simple", className: "btn-primary", onClick: async ({ root, button }) => {
+               const element = root.querySelector("#a0-print-target");
+               
                button.disabled = true;
                const originalText = button.innerHTML;
                button.innerHTML = `<i class="ph ph-spinner-gap ph-spin"></i><span>Generating PDF...</span>`;
@@ -1136,36 +1148,59 @@ async function renderAdminWorkspace(mount) {
                      });
                   }
 
-                  // 1. Clone the canvas and attach it visibly off-screen so browser renders images
-                  const clone = originalElement.cloneNode(true);
+                  // 1. Create a pristine container at the absolute root of the document
+                  const printContainer = document.createElement("div");
+                  printContainer.style.position = "absolute";
+                  printContainer.style.top = "0";
+                  printContainer.style.left = "0";
+                  printContainer.style.width = "4400px";
+                  printContainer.style.zIndex = "-9999"; 
+                  printContainer.style.background = "#0c1a11";
+
+                  // 2. Clone the element and strip the pan/zoom transform physics
+                  const clone = element.cloneNode(true);
                   clone.style.transform = "none";
-                  clone.style.position = "absolute";
-                  clone.style.top = "0";
-                  clone.style.left = "-9999px";
-                  clone.style.zIndex = "99999";
-                  document.body.appendChild(clone);
-                  
-                  // 2. Wait 400ms for all images to decode and render
+                  clone.style.margin = "0";
+                  // CRITICAL FIX: Ensure document flow is respected so height doesn't collapse to 0
+                  clone.style.position = "relative"; 
+
+                  printContainer.appendChild(clone);
+                  document.body.appendChild(printContainer);
+
+                  // 3. Give the browser 400ms to completely paint the new DOM and images
                   await new Promise(r => setTimeout(r, 400));
 
                   const renderWidthPx = clone.scrollWidth;
                   const renderHeightPx = clone.scrollHeight;
                   
+                  // Convert pixels to exact millimeters
                   const widthMm = renderWidthPx * 0.264583;
                   const heightMm = renderHeightPx * 0.264583;
 
+                  // 4. THE LIMIT FIX: 
+                  // By dropping scale to 1.5, we get a 6600px canvas, safely under the 8192px browser limit.
+                  // This allows html2pdf to process and directly download the file without the print dialog!
                   const opt = {
                      margin: 0,
-                     filename: `FourFlavours_Menu_Board.pdf`,
+                     filename: `FourFlavours_Premium_Menu.pdf`,
                      image: { type: 'jpeg', quality: 1 },
-                     html2canvas: { scale: 2, useCORS: true, logging: false, backgroundColor: '#0c1a11' },
+                     html2canvas: { 
+                         scale: 1.5, 
+                         useCORS: true, 
+                         logging: false, 
+                         backgroundColor: '#0c1a11',
+                         width: renderWidthPx,
+                         height: renderHeightPx,
+                         windowWidth: renderWidthPx,
+                         windowHeight: renderHeightPx
+                     },
                      jsPDF: { unit: 'mm', format: [widthMm, heightMm], orientation: widthMm > heightMm ? 'landscape' : 'portrait' }
                   };
                   
                   await html2pdf().set(opt).from(clone).save();
                   
-                  // 3. Cleanup the temporary clone
-                  document.body.removeChild(clone);
+                  // 5. Cleanup the temporary clone instantly after download triggers
+                  document.body.removeChild(printContainer);
                } catch (err) {
                   console.error("PDF Generation failed:", err);
                   showToast("Generation Error", "Failed to compile PDF.", "error");
@@ -2552,7 +2587,11 @@ async function renderAdminWorkspace(mount) {
 
   // Listen for the custom inbox event triggered by navigation.js
   const adminAlertHandler = async () => {
-    if (section === "overview") renderOverview();
+    // Await reload() to fetch the live active tables without manual refresh.
+    // The 400ms timeout ensures Postgres has completely finished saving the new session before we query it.
+    setTimeout(async () => {
+       if (section === "overview") await reload();
+    }, 400);
   };
   window.addEventListener("ff_admin_alert_received", adminAlertHandler);
 
