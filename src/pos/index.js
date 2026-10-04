@@ -293,7 +293,7 @@ export async function render({ mount }) {
       area.innerHTML = `
         <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: calc(100vh - 180px); padding-bottom: 20px;">
           ${isCustomerMode ? '' : `
-            <section class="pos-toolbar-row" style="display: flex; justify-content: center; width: 100%; gap: 8px; margin-bottom: 20px; flex-wrap: nowrap; overflow-x: auto;">
+            <section class="pos-toolbar-row" style="display: flex; justify-content: center; width: 100%; gap: 8px; margin-bottom: 24px; flex-wrap: nowrap; overflow-x: auto;">
               <button class="pos-toolbar-pill ${state.getState().orderType === 'dine_in' ? 'active' : ''}" data-order-type="dine_in" style="height: 44px; padding: 0 14px; font-size: 14px; font-weight: 800; gap: 7px; border-radius: 12px; border: 1px solid ${state.getState().orderType === 'dine_in' ? 'transparent' : 'var(--line)'}; white-space: nowrap; flex-shrink: 0;">
                 <i class="ph-bold ph-fork-knife" style="font-size: 18px; line-height: 1;"></i>
                 <span style="white-space: nowrap;">Dine-in</span>
@@ -302,17 +302,17 @@ export async function render({ mount }) {
                 <i class="ph-bold ph-shopping-bag" style="font-size: 18px; color: var(--forest-800); line-height: 1;"></i>
                 <span style="white-space: nowrap;">Takeaway</span>
               </button>
-              <div class="pos-toolbar-pill ${!state.getState().tableId && state.getState().orderType === 'dine_in' ? '' : 'has-table'}" id="pos-table-wrap" style="height: 44px; padding: 0 14px; font-size: 14px; font-weight: 800; gap: 7px; border-radius: 12px; border: 1px solid var(--line); color: var(--forest-800); white-space: nowrap; flex-shrink: 0; cursor: pointer;">
+              <div class="pos-toolbar-pill ${!state.getState().tableId && state.getState().orderType === 'dine_in' ? '' : 'has-table'}" id="pos-table-wrap" style="height: 44px; padding: 0 14px; font-size: 14px; font-weight: 800; gap: 7px; border-radius: 12px; border: 1px solid var(--line); color: var(--forest-800); white-space: nowrap; flex-shrink: 0; cursor: pointer; transition: all 0.2s ease; ${state.getState().orderType === 'takeaway' ? 'opacity: 0.4; pointer-events: none; background: rgba(0,0,0,0.04); border-color: transparent;' : ''}">
                 <span class="selected-text" id="pos-table-display" style="display: inline-flex; align-items: center; gap: 7px; font-size: 14px; font-weight: 800; color: var(--forest-800); white-space: nowrap;">
                   <i class="ph-bold ph-armchair" style="font-size: 18px; color: var(--forest-800); line-height: 1;"></i>
-                  <span style="white-space: nowrap;">${state.getState().tableId ? `Table ${tables.find(t => t.id === state.getState().tableId)?.table_no || ''}` : 'Table'}</span>
+                  <span style="white-space: nowrap;">${state.getState().tableId && state.getState().orderType === 'dine_in' ? `Table ${tables.find(t => t.id === state.getState().tableId)?.table_no || ''}` : 'Table'}</span>
                   <i class="ph-bold ph-caret-down" style="font-size: 16px; color: var(--forest-800); line-height: 1;"></i>
                 </span>
               </div>
             </section>
           `}
-          <div class="drill-down-header" style="text-align: center; margin-bottom: 24px; width: 100%;">
-            <h2 style="font-size: 22px;">Choose a Cuisine</h2>
+          <div class="drill-down-header" style="display: flex; justify-content: center; align-items: center; margin-bottom: 24px; width: 100%;">
+            <h2 style="font-size: 22px; margin: 0; text-align: center;">Choose a Cuisine</h2>
           </div>
           <div class="cuisine-hero-grid" id="pos-cuisine-grid" style="width: 100%; margin: 0 auto; justify-content: center; max-width: 800px;">
             ${cuisines.map(c => `
