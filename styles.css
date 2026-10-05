@@ -841,15 +841,18 @@ button,input,select,textarea{font:inherit}button{border:0}button:disabled{cursor
 .sub-category-dropdown {
   position: absolute;
   top: calc(100% + 12px);
-  right: 0;
+  right: 0; /* Anchors the menu perfectly to the right edge of the toggle button */
   background: var(--paper);
   border: 1px solid var(--line);
   border-radius: 16px;
   padding: 8px;
   box-shadow: 0 16px 40px rgba(18,34,22,0.18);
+  
+  /* GRID LAYOUT: Forces exactly 6 columns and automatically wraps >6 items to the next line */
   display: grid;
-  grid-template-columns: repeat(3, minmax(75px, 1fr));
+  grid-template-columns: repeat(6, 75px);
   gap: 6px;
+  
   opacity: 0;
   transform: translateY(-10px) scale(0.95);
   pointer-events: none;
@@ -864,10 +867,91 @@ button,input,select,textarea{font:inherit}button{border:0}button:disabled{cursor
   pointer-events: auto;
 }
 
-@media (max-width: 480px) {
+/* Dynamic Tile Width inside Grid */
+.sub-category-dropdown .sub-category-tile {
+  width: 100%;
+  padding: 8px 4px;
+}
+
+/* --- THE TARGETED FOCUS BACKDROP OVERLAY --- */
+.menu-dropdown-backdrop {
+  position: absolute; /* Anchors strictly to the product grid wrapper */
+  inset: 0; /* Covers only the products, leaving headers completely clear */
+  background: rgba(18, 34, 22, 0.35); /* Premium, slightly lighter dimming */
+  backdrop-filter: blur(6px); /* Stronger blur makes the top header pop beautifully */
+  -webkit-backdrop-filter: blur(6px);
+  z-index: 35; /* Sits perfectly ABOVE products, but UNDER the header (40) and cart (50) */
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.menu-dropdown-backdrop.active {
+  opacity: 1;
+  pointer-events: auto; /* Activates click-to-close */
+}
+
+/* Elevates the active button/dropdown wrapper to sit ABOVE the backdrop */
+.dropdown-anchor-wrap {
+  z-index: 40;
+  transition: z-index 0s 0.3s; /* Delays lowering the z-index until the menu finishes fading out */
+}
+.dropdown-anchor-wrap.focused-anchor {
+  z-index: 55;
+  transition: z-index 0s 0s; /* Instantly raises the z-index when opened */
+}
+
+
+/* --- MOBILE MARGIN PERFECTION --- */
+/* Mathematically anchors dropdowns to the exact edges of the content safe area */
+@media (max-width: 650px) {
+  /* 1. Strip relative positioning from wrappers so dropdowns anchor to the header instead */
+  .dropdown-anchor-wrap {
+    position: static !important;
+  }
+
+  /* 2. Lock both dropdowns strictly to the header boundaries (which perfectly match the content boundaries now) */
+  .sub-category-dropdown, .cuisine-mega-dropdown {
+    width: 100% !important;
+    max-width: none !important;
+    left: 0 !important;
+    right: 0 !important;
+    transform-origin: top center !important;
+  }
+
   .sub-category-dropdown {
-    grid-template-columns: repeat(3, minmax(65px, 1fr));
-    right: -10px; /* Aligns securely to screen edge on narrow phones */
+    grid-template-columns: repeat(6, minmax(0, 1fr)) !important;
+    gap: 4px;
+    padding: 6px;
+  }
+
+  .cuisine-mega-dropdown {
+    padding: 8px;
+  }
+
+  /* 3. Converts the scrolling horizontal row into a locked, non-scrolling grid */
+  .cuisine-mega-grid {
+    display: grid !important;
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important; /* Perfectly divides width among 4 cards */
+    gap: 8px !important;
+    padding: 4px !important;
+    overflow: hidden !important; /* Disables swiping completely */
+  }
+
+  .mini-cuisine-card {
+    width: 100% !important;
+    aspect-ratio: 3/4 !important;
+  }
+
+  /* Internal Icon & Text Scaling for tiny screens */
+  .sub-category-dropdown .sub-category-tile {
+    padding: 6px 2px;
+  }
+  .sub-category-dropdown .sub-category-tile i {
+    font-size: 18px; 
+  }
+  .sub-category-dropdown .sub-category-tile span {
+    font-size: 0.55rem; 
+    word-break: break-word; /* Prevents long words from breaking the rigid 6-column grid */
   }
 }
 
@@ -2206,60 +2290,74 @@ nav#admin-section-nav.admin-section-nav button.active span {
   flex-direction: row !important;
   justify-content: space-between !important;
   align-items: center !important;
-  padding: 8px var(--app-px) !important;
-  min-height: 56px !important;
-  background: rgba(252, 252, 249, 0.85) !important;
-  backdrop-filter: blur(16px) !important;
-  -webkit-backdrop-filter: blur(16px) !important;
-  border-bottom: 1px solid rgba(0,0,0,0.06) !important;
-  position: sticky !important;
-  top: 0 !important;
+  padding: 4px 0 16px 0 !important; /* Clean vertical spacing without the box */
+  min-height: auto !important;
+  background: transparent !important; /* Removes the background strip */
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  border-bottom: none !important;
+  position: relative !important;
   z-index: 40 !important;
-  margin: 0 calc(-1 * var(--app-px)) 12px calc(-1 * var(--app-px)) !important;
-  width: calc(100% + (2 * var(--app-px))) !important;
+  margin: 0 !important; /* Inherits the exact margins of the content automatically */
+  width: 100% !important;
 }
 
-.cuisine-center-toggle {
+/* High-Contrast Pill Toggles */
+.cuisine-center-toggle, .subcat-right-toggle {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  padding: 6px 18px;
-  border-radius: 20px;
-  background: var(--forest-900);
-  color: #ffffff;
-  font-weight: 800;
-  font-size: 0.95rem;
-  border: 1px solid var(--forest-800);
+  gap: 8px;
+  padding: 8px 20px;
+  border-radius: 24px;
+  font-weight: 900;
+  font-size: 1rem;
   cursor: pointer;
   transition: all 0.2s ease;
-  box-shadow: 0 4px 12px rgba(25, 50, 28, 0.15);
+  box-shadow: 0 6px 16px rgba(18, 34, 22, 0.15);
 }
-.cuisine-center-toggle.open i { transform: rotate(180deg); }
+.cuisine-center-toggle {
+  background: var(--forest-900);
+  color: #ffffff;
+  border: 2px solid var(--forest-950);
+}
+.subcat-right-toggle {
+  background: #ffffff;
+  color: var(--forest-950);
+  border: 2px solid var(--forest-900);
+}
+
+.cuisine-center-toggle.open, .subcat-right-toggle.open {
+  transform: translateY(2px);
+  box-shadow: 0 2px 8px rgba(18, 34, 22, 0.1);
+}
+.cuisine-center-toggle.open { background: var(--forest-950); }
+.subcat-right-toggle.open { background: var(--sage-100); }
+.cuisine-center-toggle.open i, .subcat-right-toggle.open i { transform: rotate(180deg); }
 
 .cuisine-mega-dropdown {
   position: absolute;
-  top: calc(100% + 8px);
-  left: 50%;
-  transform: translateX(-50%) translateY(-15px) scale(0.95);
+  top: calc(100% + 12px);
+  left: 0; /* Aligned securely to the left edge of the button */
+  transform: translateY(-15px) scale(0.95);
   background: rgba(255, 255, 255, 0.95);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   border: 1px solid var(--line);
   border-radius: 20px;
-  padding: 6px; /* Greatly reduced outer padding */
+  padding: 6px; 
   box-shadow: 0 16px 40px rgba(18,34,22,0.18);
   opacity: 0;
   pointer-events: none;
   transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-  transform-origin: top center;
+  transform-origin: top left;
   z-index: 60;
   width: max-content;
-  max-width: calc(100vw - 24px); 
+  max-width: calc(100vw - var(--app-px)); /* Prevents horizontal scroll clipping on small phones */
 }
 .cuisine-mega-dropdown.active {
   opacity: 1;
-  transform: translateX(-50%) translateY(0) scale(1);
+  transform: translateY(0) scale(1);
   pointer-events: auto;
 }
 

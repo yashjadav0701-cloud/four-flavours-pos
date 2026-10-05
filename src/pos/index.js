@@ -544,15 +544,8 @@ export async function render({ mount }) {
     if (!searchTerm) {
       html += `
         <div id="parity-unified-header">
-          <!-- Left: Back Button -->
-          <div style="flex: 1; display: flex; justify-content: flex-start;">
-            <button id="pos-btn-back" title="Back" style="margin: 0; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; background: #ffffff; border-radius: 50%; border: 1px solid rgba(0,0,0,0.06); box-shadow: 0 2px 8px rgba(0,0,0,0.04); cursor: pointer;">
-              <i class="ph-bold ph-arrow-left" style="font-size: 1.1rem; color: var(--forest-900);"></i>
-            </button>
-          </div>
-          
-          <!-- Center: Thumbnail Dropdown -->
-          <div style="flex: 2; display: flex; justify-content: center; position: relative;">
+          <!-- Left: Thumbnail Dropdown (Replaces Back Button) -->
+          <div id="mega-dropdown-wrap" class="dropdown-anchor-wrap" style="display: flex; justify-content: flex-start; position: relative;">
             <button id="cuisine-main-toggle" class="cuisine-center-toggle">
               <span>${escapeHtml(activeCuisine)}</span>
               <i class="ph-bold ph-caret-down" style="font-size: 1.1rem; transition: transform 0.3s ease;"></i>
@@ -573,10 +566,10 @@ export async function render({ mount }) {
           </div>
 
           <!-- Right: Subcategory Dropdown -->
-          <div style="flex: 1; display: flex; justify-content: flex-end; position: relative;">
-            <button id="pos-cat-toggle" style="margin: 0; display: flex; align-items: center; gap: 4px; padding: 0 12px; height: 36px; background: #ffffff; border: 1px solid rgba(0,0,0,0.06); box-shadow: 0 2px 8px rgba(0,0,0,0.04); border-radius: 18px; font-weight: 800; font-size: 0.85rem; color: var(--forest-900); cursor: pointer;">
-              <span style="max-width: 65px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(activeSubCategory)}</span>
-              <i class="ph-bold ph-caret-down" style="color: var(--gold-500); font-size: 1rem; transition: transform 0.3s ease;"></i>
+          <div id="subcat-dropdown-wrap" class="dropdown-anchor-wrap" style="display: flex; justify-content: flex-end; position: relative;">
+            <button id="pos-cat-toggle" class="subcat-right-toggle">
+              <span style="max-width: 80px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(activeSubCategory)}</span>
+              <i class="ph-bold ph-caret-down" style="color: var(--forest-900); font-size: 1.1rem; transition: transform 0.3s ease;"></i>
             </button>
             <div class="sub-category-dropdown" id="pos-subcat-dropdown">
               ${subCategories.map(sub => `
@@ -605,9 +598,19 @@ export async function render({ mount }) {
       `;
     }
 
-    // GAP OBLITERATED: Removed the hardcoded 'padding-top: 70px'
-    html += `<section class="pos-product-container" id="pos-product-container"><div class="pos-product-grid" id="pos-product-grid"></div></section>`;
-    
+    // CRITICAL FIX: Append the product grid container before writing to the DOM!
+    // We wrap it in a relative container so the focus backdrop ONLY blurs the products,
+    // leaving the top navigation and headers completely clear and focused!
+    html += `
+      <div style="position: relative; flex: 1; display: flex; flex-direction: column; min-height: 0; width: 100%;">
+        <!-- Targeted Focus Backdrop -->
+        <div id="menu-dropdown-backdrop" class="menu-dropdown-backdrop"></div>
+        <section class="pos-product-container" id="pos-product-container">
+          <div class="pos-product-grid" id="pos-product-grid"></div>
+        </section>
+      </div>
+    `;
+
     area.innerHTML = html;
 
     area.querySelector("#pos-btn-back")?.addEventListener("click", () => {
@@ -620,36 +623,64 @@ export async function render({ mount }) {
       }
     });
 
-    // References for both dropdowns
+    // Node References
     const toggleBtn = area.querySelector("#pos-cat-toggle");
     const dropdown = area.querySelector("#pos-subcat-dropdown");
+    const subcatWrap = area.querySelector("#subcat-dropdown-wrap");
+    
     const megaToggleBtn = area.querySelector("#cuisine-main-toggle");
     const megaDropdown = area.querySelector("#cuisine-mega-dropdown");
+    const megaWrap = area.querySelector("#mega-dropdown-wrap");
     
-    toggleBtn?.addEventListener("click", (e) => {
-      e.stopPropagation();
+    const backdrop = area.querySelector("#menu-dropdown-backdrop");
+
+    function closeAllDropdowns() {
       megaDropdown?.classList.remove("active");
       megaToggleBtn?.classList.remove("open");
-      toggleBtn.classList.toggle("open");
-      dropdown.classList.toggle("active");
+      megaWrap?.classList.remove("focused-anchor");
+      
+      dropdown?.classList.remove("active");
+      toggleBtn?.classList.remove("open");
+      subcatWrap?.classList.remove("focused-anchor");
+      
+      backdrop?.classList.remove("active");
+    }
+
+    toggleBtn?.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const isOpening = !dropdown.classList.contains("active");
+      closeAllDropdowns(); // Close everything else instantly
+      if (isOpening) {
+        toggleBtn.classList.add("open");
+        dropdown.classList.add("active");
+        subcatWrap?.classList.add("focused-anchor");
+        backdrop?.classList.add("active");
+      }
     });
 
     megaToggleBtn?.addEventListener("click", (e) => {
       e.stopPropagation();
-      dropdown?.classList.remove("active");
-      toggleBtn?.classList.remove("open");
-      megaToggleBtn.classList.toggle("open");
-      megaDropdown.classList.toggle("active");
+      const isOpening = !megaDropdown.classList.contains("active");
+      closeAllDropdowns();
+      if (isOpening) {
+        megaToggleBtn.classList.add("open");
+        megaDropdown.classList.add("active");
+        megaWrap?.classList.add("focused-anchor");
+        backdrop?.classList.add("active");
+      }
     });
 
+    // Clicking the dimmed background instantly closes the menu
+    backdrop?.addEventListener("click", (e) => {
+      e.stopPropagation();
+      closeAllDropdowns();
+    });
+
+    // Fallback for clicks outside the area
     document.addEventListener("click", (e) => {
-      if (dropdown && !dropdown.contains(e.target) && !toggleBtn.contains(e.target)) {
-        dropdown.classList.remove("active");
-        toggleBtn?.classList.remove("open");
-      }
-      if (megaDropdown && !megaDropdown.contains(e.target) && !megaToggleBtn.contains(e.target)) {
-        megaDropdown.classList.remove("active");
-        megaToggleBtn?.classList.remove("open");
+      if (dropdown && !dropdown.contains(e.target) && !toggleBtn.contains(e.target) &&
+          megaDropdown && !megaDropdown.contains(e.target) && !megaToggleBtn.contains(e.target)) {
+        closeAllDropdowns();
       }
     });
 
