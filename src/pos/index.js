@@ -542,19 +542,41 @@ export async function render({ mount }) {
     
     let html = ``;
     if (!searchTerm) {
-      // 100% PARITY: Slimmed Glassmorphism header
       html += `
         <div id="parity-unified-header">
-          <div style="display: flex; align-items: center; gap: 10px;">
-            <button id="pos-btn-back" title="Back" style="margin: 0; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; background: #ffffff; border-radius: 50%; border: 1px solid rgba(0,0,0,0.04); box-shadow: 0 2px 8px rgba(0,0,0,0.06); cursor: pointer;">
-              <i class="ph-bold ph-arrow-left" style="font-size: 1rem; color: var(--forest-900);"></i>
+          <!-- Left: Back Button -->
+          <div style="flex: 1; display: flex; justify-content: flex-start;">
+            <button id="pos-btn-back" title="Back" style="margin: 0; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; background: #ffffff; border-radius: 50%; border: 1px solid rgba(0,0,0,0.06); box-shadow: 0 2px 8px rgba(0,0,0,0.04); cursor: pointer;">
+              <i class="ph-bold ph-arrow-left" style="font-size: 1.1rem; color: var(--forest-900);"></i>
             </button>
-            <h2 style="margin: 0; font-size: 1.15rem; font-weight: 800; color: var(--forest-950); letter-spacing: -0.01em; line-height: 1;">${escapeHtml(activeCuisine)}</h2>
           </div>
-          <div style="position: relative;">
-            <button id="pos-cat-toggle" style="margin: 0; display: flex; align-items: center; gap: 6px; padding: 0 14px; height: 32px; background: #ffffff; border: 1px solid rgba(0,0,0,0.04); box-shadow: 0 2px 8px rgba(0,0,0,0.06); border-radius: 16px; font-weight: 700; font-size: 0.85rem; color: var(--forest-900); cursor: pointer;">
-              <span>${escapeHtml(activeSubCategory)}</span>
-              <i class="ph-bold ph-caret-down" style="color: var(--gold-500); font-size: 1rem;"></i>
+          
+          <!-- Center: Thumbnail Dropdown -->
+          <div style="flex: 2; display: flex; justify-content: center; position: relative;">
+            <button id="cuisine-main-toggle" class="cuisine-center-toggle">
+              <span>${escapeHtml(activeCuisine)}</span>
+              <i class="ph-bold ph-caret-down" style="font-size: 1.1rem; transition: transform 0.3s ease;"></i>
+            </button>
+
+            <div class="cuisine-mega-dropdown" id="cuisine-mega-dropdown">
+              <div class="cuisine-mega-grid">
+                ${cuisines.map(c => `
+                  <div class="mini-cuisine-card ${c.name === activeCuisine ? 'active' : ''}" data-mega-cuisine="${escapeHtml(c.name)}">
+                    <div class="mini-cuisine-bg">
+                      ${c.image_url ? `<img src="${versionedAsset(c.image_url)}" alt="">` : `<i class="ph-fill ph-image" style="font-size: 24px; color: var(--muted); display: grid; place-items: center; height: 100%;"></i>`}
+                    </div>
+                    <div class="mini-cuisine-overlay"><span>${escapeHtml(c.name)}</span></div>
+                  </div>
+                `).join("")}
+              </div>
+            </div>
+          </div>
+
+          <!-- Right: Subcategory Dropdown -->
+          <div style="flex: 1; display: flex; justify-content: flex-end; position: relative;">
+            <button id="pos-cat-toggle" style="margin: 0; display: flex; align-items: center; gap: 4px; padding: 0 12px; height: 36px; background: #ffffff; border: 1px solid rgba(0,0,0,0.06); box-shadow: 0 2px 8px rgba(0,0,0,0.04); border-radius: 18px; font-weight: 800; font-size: 0.85rem; color: var(--forest-900); cursor: pointer;">
+              <span style="max-width: 65px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(activeSubCategory)}</span>
+              <i class="ph-bold ph-caret-down" style="color: var(--gold-500); font-size: 1rem; transition: transform 0.3s ease;"></i>
             </button>
             <div class="sub-category-dropdown" id="pos-subcat-dropdown">
               ${subCategories.map(sub => `
@@ -570,7 +592,15 @@ export async function render({ mount }) {
     } else {
       html += `
         <div id="parity-unified-header">
-          <h2 style="margin: 0; font-size: 1.1rem; font-weight: 800; color: var(--forest-950);">Search results for "${escapeHtml(searchTerm)}"</h2>
+          <div style="flex: 1; display: flex; justify-content: flex-start;">
+             <button id="pos-btn-back" title="Back" style="margin: 0; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; background: #ffffff; border-radius: 50%; border: 1px solid rgba(0,0,0,0.06); box-shadow: 0 2px 8px rgba(0,0,0,0.04); cursor: pointer;">
+              <i class="ph-bold ph-arrow-left" style="font-size: 1.1rem; color: var(--forest-900);"></i>
+            </button>
+          </div>
+          <div style="flex: 4; display: flex; justify-content: center;">
+             <h2 style="margin: 0; font-size: 1.1rem; font-weight: 800; color: var(--forest-950); text-align: center;">Search: "${escapeHtml(searchTerm)}"</h2>
+          </div>
+          <div style="flex: 1;"></div>
         </div>
       `;
     }
@@ -582,7 +612,7 @@ export async function render({ mount }) {
 
     area.querySelector("#pos-btn-back")?.addEventListener("click", () => {
       if (window.history.state?.view === "cuisine") {
-        window.history.back(); // Triggers the popstate handler naturally
+        window.history.back(); 
       } else {
         activeCuisine = null;
         activeSubCategory = "All";
@@ -590,19 +620,36 @@ export async function render({ mount }) {
       }
     });
 
+    // References for both dropdowns
     const toggleBtn = area.querySelector("#pos-cat-toggle");
     const dropdown = area.querySelector("#pos-subcat-dropdown");
+    const megaToggleBtn = area.querySelector("#cuisine-main-toggle");
+    const megaDropdown = area.querySelector("#cuisine-mega-dropdown");
     
     toggleBtn?.addEventListener("click", (e) => {
       e.stopPropagation();
+      megaDropdown?.classList.remove("active");
+      megaToggleBtn?.classList.remove("open");
       toggleBtn.classList.toggle("open");
       dropdown.classList.toggle("active");
+    });
+
+    megaToggleBtn?.addEventListener("click", (e) => {
+      e.stopPropagation();
+      dropdown?.classList.remove("active");
+      toggleBtn?.classList.remove("open");
+      megaToggleBtn.classList.toggle("open");
+      megaDropdown.classList.toggle("active");
     });
 
     document.addEventListener("click", (e) => {
       if (dropdown && !dropdown.contains(e.target) && !toggleBtn.contains(e.target)) {
         dropdown.classList.remove("active");
         toggleBtn?.classList.remove("open");
+      }
+      if (megaDropdown && !megaDropdown.contains(e.target) && !megaToggleBtn.contains(e.target)) {
+        megaDropdown.classList.remove("active");
+        megaToggleBtn?.classList.remove("open");
       }
     });
 
@@ -611,6 +658,18 @@ export async function render({ mount }) {
         activeSubCategory = btn.dataset.sub;
         dropdown?.classList.remove("active");
         toggleBtn?.classList.remove("open");
+        renderProducts();
+      });
+    });
+
+    area.querySelectorAll("[data-mega-cuisine]").forEach(card => {
+      card.addEventListener("click", () => {
+        activeCuisine = card.dataset.megaCuisine;
+        activeSubCategory = "All"; 
+        megaDropdown?.classList.remove("active");
+        megaToggleBtn?.classList.remove("open");
+        
+        window.history.pushState({ view: "cuisine", cuisine: activeCuisine }, "", "#" + encodeURIComponent(activeCuisine));
         renderProducts();
       });
     });

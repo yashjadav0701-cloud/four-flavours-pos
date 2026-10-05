@@ -625,12 +625,23 @@ async function renderAdminWorkspace(mount) {
     const list = area.querySelector("#orders-list");
     
     try {
-      // Fetch orders and their nested items
-      const { data: orders, error } = await supabase.from("orders").select("*, order_items(*)").order("created_at", { ascending: false }).limit(100);
+      // Fetch orders, nested items, AND the status of their associated dining session
+      const { data: rawOrders, error } = await supabase.from("orders")
+        .select("*, order_items(*), dining_sessions(status)")
+        .order("created_at", { ascending: false })
+        .limit(150);
+        
       if (error) throw error;
       
+      // LOGIC FIX: Only show Takeaway orders, or Dine-In orders where the table session is fully 'closed'.
+      // This hides active eating tables from the "Past Bills" ledger!
+      const orders = rawOrders.filter(o => 
+          o.order_type === 'takeaway' || 
+          (o.dining_sessions && o.dining_sessions.status === 'closed')
+      );
+      
       if (!orders || orders.length === 0) {
-        list.innerHTML = `<div class="empty-state"><i class="ph ph-receipt"></i><strong>No orders yet</strong><span>Completed orders will appear here.</span></div>`;
+        list.innerHTML = `<div class="empty-state"><i class="ph ph-receipt"></i><strong>No completed bills yet</strong><span>Once a table is closed and paid, its final receipt will appear here.</span></div>`;
         return;
       }
 
@@ -752,8 +763,8 @@ async function renderAdminWorkspace(mount) {
         </table>
         <div class="thermal-totals-wrap">
           <div class="thermal-line"><span>Subtotal</span><strong>${money(order.subtotal, settings.currency_symbol)}</strong></div>
-          <div class="thermal-line"><span>CGST (${order.cgst_rate}%)</span><strong>${money(order.cgst, settings.currency_symbol)}</strong></div>
-          <div class="thermal-line"><span>SGST (${order.sgst_rate}%)</span><strong>${money(order.sgst, settings.currency_symbol)}</strong></div>
+          <div class="thermal-line"><span>CGST (${order.subtotal > 0 ? parseFloat(((order.cgst / order.subtotal) * 100).toFixed(2)) : (settings.cgst_rate || 0)}%)</span><strong>${money(order.cgst, settings.currency_symbol)}</strong></div>
+          <div class="thermal-line"><span>SGST (${order.subtotal > 0 ? parseFloat(((order.sgst / order.subtotal) * 100).toFixed(2)) : (settings.sgst_rate || 0)}%)</span><strong>${money(order.sgst, settings.currency_symbol)}</strong></div>
           <div class="thermal-line"><span>Rounding</span><strong>${money(order.rounding, settings.currency_symbol)}</strong></div>
           <div class="thermal-line thermal-grand"><span>GRAND TOTAL</span><strong>${money(order.grand_total, settings.currency_symbol)}</strong></div>
         </div>
@@ -1537,35 +1548,73 @@ async function renderAdminWorkspace(mount) {
           });
         });
 
-        // QUICK ADD ITEMS LOGIC
+        // QUICK ADD ITEMS LOGIC (BATCH DRAFT MODE)
         host.querySelector("#admin-add-items").addEventListener("click", () => {
            const allActiveProducts = products.filter(p => p.is_active);
+           let draftAdditions = new Map(); // Local cart for the modal
+           let currentFilteredList = allActiveProducts; // Keeps track of search state
            
            function renderAdminItemList(list) {
               if (!list || !list.length) return `<div class="empty-state compact"><i class="ph ph-magnifying-glass"></i><strong>No dishes found</strong></div>`;
-              return list.map(p => `
+              return list.map(p => {
+                 const qty = draftAdditions.get(p.id)?.quantity || 0;
+                 return `
                  <div style="display:flex; justify-content:space-between; align-items:center; padding: 14px 0; border-bottom: 1px solid var(--cream-200);">
                     <div style="display:flex; flex-direction:column; gap:4px;">
                        <strong style="font-size: 14px; color: var(--forest-950);">${escapeHtml(p.name)}</strong>
                        <span style="font-size:12.5px; color:var(--muted);">${money(p.price, settings.currency_symbol)}</span>
                     </div>
-                    <button class="btn btn-quiet btn-small admin-quick-add-btn" data-quick-add="${p.id}" data-name="${escapeHtml(p.name)}" data-price="${p.price}"><i class="ph-bold ph-plus"></i> Add 1</button>
+                    ${qty > 0 ? `
+                        <div style="display: flex; align-items: center; justify-content: space-between; width: 96px; height: 36px; background: #ffffff; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.04); flex-shrink: 0;">
+                           <button data-draft-dec="${p.id}" style="width: 34px; height: 100%; background: var(--forest-900); color: #fff; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: background 0.2s;"><i class="ph-bold ph-minus"></i></button>
+                           <span style="flex: 1; text-align: center; font-size: 14px; font-weight: 800; color: var(--forest-950);">${qty}</span>
+                           <button data-draft-inc="${p.id}" data-name="${escapeHtml(p.name)}" data-price="${p.price}" style="width: 34px; height: 100%; background: var(--forest-900); color: #fff; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: background 0.2s;"><i class="ph-bold ph-plus"></i></button>
+                        </div>
+                    ` : `
+                        <button class="btn btn-quiet btn-small" data-draft-inc="${p.id}" data-name="${escapeHtml(p.name)}" data-price="${p.price}" style="border-radius: 12px; font-weight: 800; border-color: var(--line); color: var(--forest-900); padding: 0 16px; height: 36px;"><i class="ph-bold ph-plus"></i> Add</button>
+                    `}
                  </div>
-              `).join("");
+              `}).join("");
+           }
+
+           function updateUI() {
+               host.querySelector("#admin-item-grid").innerHTML = renderAdminItemList(currentFilteredList);
+               const totalItems = Array.from(draftAdditions.values()).reduce((sum, i) => sum + i.quantity, 0);
+               const footer = host.querySelector("#admin-draft-footer");
+               if (totalItems > 0) {
+                   footer.style.display = "flex";
+                   host.querySelector("#draft-count").textContent = totalItems;
+               } else {
+                   footer.style.display = "none";
+               }
            }
 
            host.innerHTML = `
-             <div class="admin-add-item-list" style="text-align: left;">
-                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 16px;">
-                   <button class="icon-btn icon-btn-light" id="back-to-manager"><i class="ph-bold ph-arrow-left"></i></button>
-                   <h3 style="margin: 0; font-size: 16px;">Add Items to Table ${escapeHtml(table.table_no)}</h3>
+             <div class="admin-add-item-list" style="text-align: left; display: flex; flex-direction: column; min-height: 50vh;">
+                
+                <!-- NEW INLINE SEARCH BAR & BACK BUTTON -->
+                <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px; flex-shrink: 0; width: 100%;">
+                   <button class="icon-btn icon-btn-light" id="back-to-manager" style="flex-shrink: 0; width: 44px; height: 44px; border-radius: 14px; box-shadow: 0 2px 6px rgba(0,0,0,0.04);">
+                     <i class="ph-bold ph-arrow-left" style="font-size: 18px;"></i>
+                   </button>
+                   
+                   <div class="search-input-wrap" style="flex: 1; margin: 0; height: 44px; border-radius: 14px; background: #ffffff; border: 1px solid var(--line); box-shadow: inset 0 2px 4px rgba(0,0,0,0.02), 0 2px 6px rgba(0,0,0,0.02); transition: all 0.2s ease;" 
+                        onfocusin="this.style.borderColor='var(--forest-500)'; this.style.boxShadow='0 0 0 3px rgba(76,110,75,0.12)';" 
+                        onfocusout="this.style.borderColor='var(--line)'; this.style.boxShadow='inset 0 2px 4px rgba(0,0,0,0.02), 0 2px 6px rgba(0,0,0,0.02)';">
+                     <i class="ph-bold ph-magnifying-glass" style="font-size: 18px; color: var(--forest-600);"></i>
+                     <input type="text" id="admin-item-search" placeholder="Search menu to add..." style="width: 100%; border: none; background: transparent; outline: none; font-size: 15px; font-weight: 700; color: var(--forest-950);">
+                   </div>
                 </div>
-                <div class="search-input-wrap" style="margin-bottom: 16px;">
-                  <i class="ph-bold ph-magnifying-glass"></i>
-                  <input type="text" id="admin-item-search" placeholder="Search menu..." style="width:100%; border:none; background:transparent; outline:none; font-size: 15px; font-weight:700;">
-                </div>
-                <div id="admin-item-grid" style="max-height: 48vh; overflow-y: auto; padding-right: 8px;">
+
+                <div id="admin-item-grid" style="flex: 1; max-height: 40vh; overflow-y: auto; padding-right: 8px; margin-bottom: 8px;">
                   ${renderAdminItemList(allActiveProducts)}
+                </div>
+                
+                <!-- STICKY FOOTER FOR BATCH ADDING -->
+                <div id="admin-draft-footer" style="position: sticky; bottom: -17px; background: var(--paper); padding: 12px 0 0 0; margin-top: auto; border-top: 1px solid var(--line); display: none;">
+                  <button class="btn btn-primary" id="confirm-draft-btn" style="width: 100%; height: 48px; border-radius: 14px; font-size: 15px;">
+                    <i class="ph-bold ph-cooking-pot"></i> Send <span id="draft-count" style="margin: 0 4px;">0</span> Items to Kitchen
+                  </button>
                 </div>
              </div>
            `;
@@ -1574,55 +1623,86 @@ async function renderAdminWorkspace(mount) {
            
            host.querySelector("#admin-item-search").addEventListener("input", (e) => {
               const q = e.target.value.toLowerCase();
-              const filtered = allActiveProducts.filter(p => p.name.toLowerCase().includes(q));
-              host.querySelector("#admin-item-grid").innerHTML = renderAdminItemList(filtered);
+              currentFilteredList = allActiveProducts.filter(p => p.name.toLowerCase().includes(q));
+              updateUI();
            });
 
-           host.querySelectorAll(".admin-quick-add-btn").forEach(btn => {
-              btn.addEventListener("click", async () => {
-                 window.__STAFF_MUTED_UNTIL = Date.now() + 3000;
-                 btn.disabled = true;
-                 btn.innerHTML = `<i class="ph ph-spinner-gap ph-spin"></i>`;
-                 try {
-                    // Intelligent Merge Sync
-                    const { data: existingItems } = await supabase.from("order_items").select("*").eq("order_id", latestOrder.id);
-                    const mergedMap = new Map();
-                    
-                    if (existingItems) {
-                        existingItems.forEach(item => {
-                            mergedMap.set(item.product_id, {
-                                id: item.product_id, product_id: item.product_id,
-                                name: item.name_snapshot, name_snapshot: item.name_snapshot,
-                                price: item.unit_price, unit_price: item.unit_price, quantity: item.quantity
-                            });
-                        });
-                    }
-                    
-                    const pId = btn.dataset.quickAdd;
-                    if (mergedMap.has(pId)) {
-                        mergedMap.get(pId).quantity += 1;
-                    } else {
-                        mergedMap.set(pId, { 
-                            id: pId, product_id: pId, 
-                            name: btn.dataset.name, name_snapshot: btn.dataset.name, 
-                            price: btn.dataset.price, unit_price: btn.dataset.price, quantity: 1 
-                        });
-                    }
-                    
-                    const { error } = await supabase.rpc('sync_pos_order', { 
-                        p_order_id: latestOrder.id, 
-                        p_items: Array.from(mergedMap.values()) 
-                    });
-                    if (error) throw error;
-                    
-                    showToast("Item Added", `${btn.dataset.name} sent to Table ${table.table_no}`);
-                    renderManager(); // Refresh Admin drawer instantly
-                 } catch (err) {
-                    showToast("Error", err.message, "error");
-                    btn.disabled = false;
-                    btn.innerHTML = `<i class="ph-bold ph-plus"></i> Add 1`;
+           // Event Delegation for Qty Adjustments
+           host.querySelector("#admin-item-grid").addEventListener("click", e => {
+              const inc = e.target.closest("[data-draft-inc]");
+              const dec = e.target.closest("[data-draft-dec]");
+              
+              if (inc) {
+                  const id = inc.dataset.draftInc;
+                  if (draftAdditions.has(id)) {
+                      draftAdditions.get(id).quantity++;
+                  } else {
+                      draftAdditions.set(id, {
+                          id: id, name: inc.dataset.name, price: inc.dataset.price, quantity: 1
+                      });
+                  }
+                  updateUI();
+              }
+              
+              if (dec) {
+                  const id = dec.dataset.draftDec;
+                  if (draftAdditions.has(id)) {
+                      const item = draftAdditions.get(id);
+                      item.quantity--;
+                      if (item.quantity <= 0) draftAdditions.delete(id);
+                      updateUI();
+                  }
+              }
+           });
+
+           // Batch Submit to Kitchen
+           host.querySelector("#confirm-draft-btn").addEventListener("click", async (e) => {
+              const btn = e.currentTarget;
+              window.__STAFF_MUTED_UNTIL = Date.now() + 3000;
+              btn.disabled = true;
+              btn.innerHTML = `<i class="ph ph-spinner-gap ph-spin"></i> Processing...`;
+              
+              try {
+                 // Intelligent Merge Sync
+                 const { data: existingItems } = await supabase.from("order_items").select("*").eq("order_id", latestOrder.id);
+                 const mergedMap = new Map();
+                 
+                 if (existingItems) {
+                     existingItems.forEach(item => {
+                         mergedMap.set(item.product_id, {
+                             id: item.product_id, product_id: item.product_id,
+                             name: item.name_snapshot, name_snapshot: item.name_snapshot,
+                             price: item.unit_price, unit_price: item.unit_price, quantity: item.quantity
+                         });
+                     });
                  }
-              });
+                 
+                 draftAdditions.forEach(draft => {
+                     if (mergedMap.has(draft.id)) {
+                         mergedMap.get(draft.id).quantity += draft.quantity;
+                     } else {
+                         mergedMap.set(draft.id, { 
+                             id: draft.id, product_id: draft.id, 
+                             name: draft.name, name_snapshot: draft.name, 
+                             price: draft.price, unit_price: draft.price, quantity: draft.quantity 
+                         });
+                     }
+                 });
+                 
+                 const { error } = await supabase.rpc('sync_pos_order', { 
+                     p_order_id: latestOrder.id, 
+                     p_items: Array.from(mergedMap.values()) 
+                 });
+                 if (error) throw error;
+                 
+                 const totalItems = Array.from(draftAdditions.values()).reduce((sum, i) => sum + i.quantity, 0);
+                 showToast("Items Added", `${totalItems} new items sent to Table ${table.table_no}`);
+                 renderManager(); // Return to active dashboard
+              } catch (err) {
+                 showToast("Error", err.message, "error");
+                 btn.disabled = false;
+                 btn.innerHTML = `<i class="ph-bold ph-cooking-pot"></i> Send <span id="draft-count" style="margin: 0 4px;">${Array.from(draftAdditions.values()).reduce((sum, i) => sum + i.quantity, 0)}</span> Items to Kitchen`;
+              }
            });
         });
 
@@ -2603,10 +2683,17 @@ async function renderAdminWorkspace(mount) {
       if (section === "orders") renderOrders();
       else if (section === "overview") await reload();
     })
-    .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'dining_sessions' }, async payload => {
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'dining_sessions' }, async payload => {
+      
+      // INSTANT SEATING DETECTION: A customer just scanned the QR code!
+      if (payload.eventType === 'INSERT' && payload.new?.status === 'open') {
+         const table = tables.find(t => t.id === payload.new.table_id);
+         if (table) showToast("Table Opened", `Table ${table.table_no} was just seated.`);
+      }
+      
       // CUSTOMER AUTO-CLOSE DETECTION: 
       // If status jumps directly from 'open' to 'closed', the customer generated the bill!
-      if (payload.new?.status === "closed" && payload.old?.status === "open") {
+      if (payload.eventType === 'UPDATE' && payload.new?.status === "closed" && payload.old?.status === "open") {
         showToast("Bill Generated & Table Freed!", `A customer finished their meal. Check the Orders tab for their bill.`, "success");
         
         // Highlight the Orders tab in Gold to notify the admin
@@ -2617,11 +2704,15 @@ async function renderAdminWorkspace(mount) {
           void ordersNavBtn.offsetWidth;
           ordersNavBtn.classList.add("qty-pulse");
         }
-      } else if (payload.new?.status === "closed" && payload.old?.status !== "closed") {
+      } else if (payload.eventType === 'UPDATE' && payload.new?.status === "closed" && payload.old?.status !== "closed") {
         showToast("Table Closed", "A table session was finalized by staff.");
       }
       
-      if (section === "overview" || section === "tables") await reload();
+      // Instantly refresh the overview and tables grid
+      if (section === "overview" || section === "tables") {
+         // A tiny 200ms delay ensures the database transaction finishes before fetching the new data
+         setTimeout(async () => await reload(), 200);
+      }
     })
     .subscribe();
 

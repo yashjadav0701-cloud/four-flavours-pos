@@ -759,6 +759,39 @@ button,input,select,textarea{font:inherit}button{border:0}button:disabled{cursor
   }
 }
 
+/* --- The Phantom Scrollbar (Fixes off-center layouts) --- */
+/* By making the scrollbar float OVER the content, the grid stays mathematically centered */
+::-webkit-scrollbar {
+  width: 14px; /* Wide hit area for easy grabbing */
+  background: transparent;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+  border-left: none;
+}
+::-webkit-scrollbar-thumb {
+  background-color: rgba(184, 197, 175, 0.6); /* var(--sage-300) with transparency */
+  border: 4px solid var(--cream-100); /* Matches the page background to create a floating pill effect */
+  border-radius: 10px;
+  background-clip: padding-box;
+  transition: background-color 0.2s ease;
+}
+::-webkit-scrollbar-thumb:hover {
+  background-color: var(--forest-500); /* Darkens when hovered for better UX */
+}
+
+/* Specific styling for the inner scrolling containers to maintain the floating look */
+.pos-product-container::-webkit-scrollbar-thumb, 
+.customer-product-scroll::-webkit-scrollbar-thumb {
+  border-color: var(--cream-100);
+}
+
+/* Firefox compatibility */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(184, 197, 175, 0.6) transparent;
+}
+
 /* --- Premium Scroll & Image Containment --- */
 .pos-product-container, .customer-product-scroll {
   -webkit-overflow-scrolling: touch;
@@ -2166,22 +2199,131 @@ nav#admin-section-nav.admin-section-nav button.active span {
   padding-top: 8px !important;
   margin-top: 0 !important;
 }
+
+/* --- Central Thumbnail Dropdown --- */
 #parity-unified-header {
   display: flex !important;
+  flex-direction: row !important;
   justify-content: space-between !important;
   align-items: center !important;
   padding: 8px var(--app-px) !important;
-  min-height: 48px !important;
-  background: rgba(244, 244, 240, 0.85) !important;
-  backdrop-filter: blur(12px) !important;
-  -webkit-backdrop-filter: blur(12px) !important;
-  border-bottom: 1px solid rgba(0,0,0,0.04) !important;
+  min-height: 56px !important;
+  background: rgba(252, 252, 249, 0.85) !important;
+  backdrop-filter: blur(16px) !important;
+  -webkit-backdrop-filter: blur(16px) !important;
+  border-bottom: 1px solid rgba(0,0,0,0.06) !important;
   position: sticky !important;
   top: 0 !important;
-  z-index: 40 !important; /* Lowered from 100 so it safely slides UNDER the main topbar */
+  z-index: 40 !important;
   margin: 0 calc(-1 * var(--app-px)) 12px calc(-1 * var(--app-px)) !important;
   width: calc(100% + (2 * var(--app-px))) !important;
-  transition: none !important;
+}
+
+.cuisine-center-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 6px 18px;
+  border-radius: 20px;
+  background: var(--forest-900);
+  color: #ffffff;
+  font-weight: 800;
+  font-size: 0.95rem;
+  border: 1px solid var(--forest-800);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 12px rgba(25, 50, 28, 0.15);
+}
+.cuisine-center-toggle.open i { transform: rotate(180deg); }
+
+.cuisine-mega-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%) translateY(-15px) scale(0.95);
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  padding: 6px; /* Greatly reduced outer padding */
+  box-shadow: 0 16px 40px rgba(18,34,22,0.18);
+  opacity: 0;
+  pointer-events: none;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  transform-origin: top center;
+  z-index: 60;
+  width: max-content;
+  max-width: calc(100vw - 24px); 
+}
+.cuisine-mega-dropdown.active {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0) scale(1);
+  pointer-events: auto;
+}
+
+.cuisine-mega-grid {
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+  padding: 8px 6px; /* This creates internal invisible space so the cards can scale up without hitting the ceiling! */
+}
+.cuisine-mega-grid::-webkit-scrollbar { display: none; }
+
+.mini-cuisine-card {
+  width: 75px;
+  aspect-ratio: 3/4;
+  position: relative;
+  border-radius: 12px;
+  overflow: hidden;
+  cursor: pointer;
+  border: 2px solid transparent;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  flex-shrink: 0;
+  background: var(--sage-100);
+}
+
+.mini-cuisine-card:hover { 
+  transform: translateY(-4px) scale(1.04); /* More pronounced, satisfying pop on hover */
+  box-shadow: 0 8px 24px rgba(18,34,22,0.2); 
+  z-index: 5;
+}
+/* Removed scale(1.05) from active so it sits flat until hovered. Added a rich gold glow instead. */
+.mini-cuisine-card.active { 
+  border-color: var(--gold-500); 
+  box-shadow: 0 0 0 1px var(--gold-500), 0 4px 12px rgba(201, 164, 90, 0.2); 
+  z-index: 2; 
+}
+
+.mini-cuisine-bg { position: absolute; inset: 0; }
+.mini-cuisine-bg img { width: 100%; height: 100%; object-fit: cover; }
+
+.mini-cuisine-overlay {
+  position: absolute; inset: 0;
+  background: linear-gradient(to top, rgba(18,34,22,0.95) 0%, rgba(18,34,22,0.2) 60%, transparent 100%);
+  display: flex; align-items: flex-end; justify-content: center;
+  padding: 8px 4px;
+}
+.mini-cuisine-overlay span {
+  color: #fff; font-size: 0.75rem; font-weight: 800; text-align: center; line-height: 1.1;
+}
+
+/* Smart Scaling for Tablet and Desktop */
+@media (min-width: 420px) { 
+  .mini-cuisine-card { width: 85px; } 
+}
+@media (min-width: 768px) { 
+  .mini-cuisine-card { width: 110px; border-radius: 16px; } 
+  .mini-cuisine-overlay span { font-size: 0.85rem; padding-bottom: 12px; }
+  .cuisine-mega-dropdown { padding: 10px; } /* Reduced from 16px to 10px */
+}
+@media (min-width: 1024px) { 
+  .mini-cuisine-card { width: 130px; } 
+  .cuisine-mega-grid { gap: 16px; padding: 12px 10px; } /* More expansion room for big screens */
+  .mini-cuisine-overlay span { font-size: 0.95rem; }
 }
 
 /* Guarantees the main app topbar stays strictly opaque and ABOVE everything else */
